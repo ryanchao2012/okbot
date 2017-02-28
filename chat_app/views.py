@@ -8,7 +8,7 @@ import time
 import random 
 
 import logging
-logger = logging.getLogger('okbot_crawl')
+logger = logging.getLogger('okbot_chat_view')
 logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
 chformatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
