@@ -1,14 +1,21 @@
 from django.shortcuts import render
 from django.http import HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
-import logging
 import json
 import requests
 import os
 import time
 import random 
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
+import logging
+logger = logging.getLogger('okbot_crawl')
+logger.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+chformatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
+ch.setLevel(logging.INFO)
+ch.setFormatter(chformatter)
+logger.addHandler(ch)
+
 
 OKBOT_PAGE_ACCESS_KEY=os.environ['OKBOT_PAGE_ACCESS_KEY']
 OKBOT_VERIFY_TOKEN=os.environ['OKBOT_VERIFY_TOKEN']
@@ -30,9 +37,9 @@ def graph_api_post(f):
 
         r = requests.post(GRAPH_API_URL, params=params, headers=headers, data=data)
         if r.status_code != 200:
-            logging.warning('gragh api post failed. code: {}, message: {}'.format(r.status_code, r.text))
+            logger.warning('gragh api post failed. code: {}, message: {}'.format(r.status_code, r.text))
         else:
-            logging.info('gragh api post success. {}'.format(log_msg))
+            logger.info('gragh api post success. {}'.format(log_msg))
 
     return graph_api_post_
 
@@ -51,14 +58,13 @@ def fb_webhook(request):
         try:
             incoming = json.loads(request.body.decode('utf-8'))
         except Exception as e:
-            logging.warning(e)
+            logger.warning(e)
             return HttpResponse()
 
         for entry in incoming['entry']:
             for message_evt in entry['messaging']:
                 sender_id = message_evt.get('sender').get('id')
                 if 'message' in message_evt:
-                    logging.info(repr(message_evt.get('message')))
                     send_typing_bubble(sender_id, True)
                     time.sleep(random.randint(1,5))
                     send_typing_bubble(sender_id, False)

@@ -1,4 +1,3 @@
-from __future__ import unicode_literals
 from django.utils.translation import ugettext_lazy as _
 from django.db import models
 from django.utils import timezone
@@ -11,10 +10,10 @@ from django.utils import timezone
 
 class Blacklist(models.Model):
     BLIST_TYPE_CHOICES = (
-        (0, _("-----")),
-        (1, _("title")),
-        (2, _("push")),
-        (3, _("author")),
+        (0, "-----"),
+        (1, "title"),
+        (2, "push"),
+        (3, "author"),
     )
     btype = models.IntegerField(choices=BLIST_TYPE_CHOICES, default=0, verbose_name=u'type')
     phrases = models.CharField(max_length=4096)
@@ -46,9 +45,13 @@ class Spider(models.Model):
 class Joblog(models.Model):
     name = models.CharField(max_length=256)
     start_time = models.DateTimeField(default=timezone.now)
-    finish_time = models.DateTimeField(default=timezone.now, blank=True)
+    finish_time = models.DateTimeField(default=timezone.now, blank=True, null=True)
     status = models.CharField(max_length=256, default='running')
 
     def __str__(self):
         return '{}'.format(self.name)
+
+    class Meta:
+        verbose_name = _('JOB LOG')
+        verbose_name_plural = verbose_name
 
