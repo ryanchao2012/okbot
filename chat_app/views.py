@@ -15,6 +15,31 @@ OKBOT_VERIFY_TOKEN=os.environ['OKBOT_VERIFY_TOKEN']
 
 # Create your views here.
 
+GRAPH_API_URL = 'https://graph.facebook.com/v2.6/me/messages'
+
+def graph_api_post(f):
+    params = {
+        "access_token": OKBOT_PAGE_ACCESS_KEY
+    }
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    def graph_api_post_(*args, **kwargs):
+        data, log_msg = f(*args, **kwargs)
+
+        r = requests.post(GRAPH_API_URL, params=params, headers=headers, data=data)
+        if r.status_code != 200:
+            logging.warning('gragh api post failed. code: {}, message: {}'.format(r.status_code, r.text))
+        else:
+            logging.info('gragh api post success. {}'.format(log_msg))
+
+    return graph_api_post_
+
+        
+    
+
+
 @csrf_exempt
 def fb_webhook(request):
     if request.method == 'GET':
@@ -34,55 +59,43 @@ def fb_webhook(request):
                 sender_id = message_evt.get('sender').get('id')
                 if 'message' in message_evt:
                     logging.info(repr(message_evt.get('message')))
-                    send_typing_bubble(sender_id)
+                    send_typing_bubble(sender_id, True)
                     time.sleep(random.randint(1,5))
+                    send_typing_bubble(sender_id, False)
                     handle_message(sender_id, message_evt.get('message'))
         
     return HttpResponse()
 
 
-
+@graph_api_post
 def handle_message(sender_id, msg):
+    query, reply = '', ''
     if 'text' in msg:
-        params = {
-            "access_token": OKBOT_PAGE_ACCESS_KEY
-        }
-        headers = {
-            "Content-Type": "application/json"
-        }
+        query = msg.get('text')
+        reply = query
 
-        reply = msg.get('text')
-        data = json.dumps({
-            "recipient": {
-                "id": sender_id
-            },
-            "message": {
-                "text": reply
-            },
-        })
-        r = requests.post("https://graph.facebook.com/v2.6/me/messages", params=params, headers=headers, data=data)
-        if r.status_code != 200:
-            logging.warning('post request to gragh api failed. code: {}, message: {}'.format(r.status_code, r.text))
-        else:
-            logging.info('post request to gragh api success. query: {}, reply: {}'.format(msg.get('text'), reply))
-
-
-def send_typing_bubble(sender_id):
-    params = {
-        "access_token": OKBOT_PAGE_ACCESS_KEY
-    }
-    headers = {
-        "Content-Type": "application/json"
-    }
     data = json.dumps({
-        "sender_action": "typing_on",
+        "recipient": {
+            "id": sender_id
+        },
+        "message": {
+            "text": reply
+        },
+    })
+    return data, 'reply message: query: {}, reply: {}'.format(query, reply)
+
+
+@graph_api_post
+def send_typing_bubble(sender_id, onoff=False):
+    if onoff:
+        typing = 'typing_on'
+    else:
+        typing = 'typing_off'
+    data = json.dumps({
+        "sender_action": typing,
         "recipient": {
             "id": sender_id
         }
     })
-    r = requests.post("https://graph.facebook.com/v2.6/me/messages", params=params, headers=headers, data=data)
-    if r.status_code != 200:
-        logging.warning('post request to gragh api failed. code: {}, message: {}'.format(r.status_code, r.text))
-    else:
-        logging.info('post request to gragh api success. send typing indicator.')
+    return data, 'send typing bubble: {}.'.format(typing)
     
