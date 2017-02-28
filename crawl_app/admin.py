@@ -5,7 +5,7 @@ from .models import Spider, Blacklist, Joblog
 
 
 class SpiderAdmin(admin.ModelAdmin):
-    list_display = ('tag', 'entry', 'newest', 'start', 'end', 'status')
+    list_display = ('tag', 'newest', 'start', 'end', 'status')
     list_editable = ('start', 'end')
     readonly_fields = ('newest', 'status')
 
@@ -23,8 +23,8 @@ class JoblogAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
-    def has_change_permission(self, request):
-        return False
+#    def has_change_permission(self, request):
+#        return False
 
 admin.site.register(Spider, SpiderAdmin)
 admin.site.register(Blacklist, BlacklistAdmin)
