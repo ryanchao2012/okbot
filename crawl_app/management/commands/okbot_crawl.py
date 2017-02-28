@@ -89,7 +89,7 @@ class Command(BaseCommand):
             return
 
         now = timezone.now()
-        jobid = '{}.{}.{}.{}'.format(tag.lower(), spider.start, spider.end, now.strftime('%Y-%m-%d-%H-%M'))
+        jobid = '{}.{}.{}.{}'.format(tag.lower(), spider.start, spider.end, now.strftime('%Y-%m-%d-%H-%M-%S'))
         try:
             Joblog(name=jobid, start_time=now, status='running').save()
         except Exception as e:
@@ -115,11 +115,12 @@ class Command(BaseCommand):
         btype = ['title', 'push', 'author']
         blist = spider.blacklist.all()
         for b in blist:
-            if b.btype in btype:
-                if b.btype in blacklist:
-                    blacklist[b.btype].extend([p.strip() for p in b.phrases.split(',')])
+            type_ = Blacklist.BLIST_TYPE_CHOICES[b.btype][1]
+            if type_ in btype:
+                if type_ in blacklist:
+                    blacklist[type_].extend([p.strip() for p in b.phrases.split(',')])
                 else:
-                    blacklist[b.btype] = [p.strip() for p in b.phrases.split(',')]
+                    blacklist[type_] = [p.strip() for p in b.phrases.split(',')]
 
         newest_idx = spider.newest
         start_idx = spider.start
@@ -131,7 +132,6 @@ class Command(BaseCommand):
 
         if start_idx >= end_idx:
             end_idx = start_idx
-
         return {
             'jobid': jobid,
             'tag': spider.tag,
