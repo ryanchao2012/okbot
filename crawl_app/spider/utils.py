@@ -1,21 +1,29 @@
 
+
+import os
+OKBOT_DB_USER = os.environ['OKBOT_DB_USER']
+OKBOT_DB_NAME = os.environ['OKBOT_DB_NAME']
+OKBOT_DB_PASSWORD = os.environ['OKBOT_DB_PASSWORD']
+
+
 def okbot_query_psql(f):
     import psycopg2
-    def okbot_query_postgres_(*args, **kwargs):
+    def okbot_query_psql_(*args, **kwargs):
         # TODO:
-        # cnn = psycopg2.connect(...)
+        cnn = psycopg2.connect(usr=OKBOT_DB_USER, database=OKBOT_DB_NAME, password=OKBOT_DB_PASSWORD)
+        cnn.cursor('okbot-query')
         # cur = cnn.cursor()
-        # try:
-        #     rv = f(cnn, *args, **kwargs)
-        # except Exception as e:
-        #     cnn.rollback()
-        #     raise
-        # finally:
-        #     cnn.close()
-        # return rv
-        pass
+        try:
+            rv = f(cnn, *args, **kwargs)
+        except Exception as e:
+            cnn.rollback()
+            raise
+        finally:
+            cnn.close()
+        return rv
+
     
-    return okbot_query_postgres_
+    return okbot_query_psql_
 
 
 
