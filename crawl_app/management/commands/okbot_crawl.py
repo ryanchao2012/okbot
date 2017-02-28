@@ -9,7 +9,6 @@ logger = logging.getLogger('okbot_crawl')
 logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
 chformatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
-ch.setLevel(logging.INFO)
 ch.setFormatter(chformatter)
 logger.addHandler(ch)
 
