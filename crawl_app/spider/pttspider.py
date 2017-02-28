@@ -1,8 +1,7 @@
 import scrapy
 import re
-from items import PttSpiderItem
+from .items import PttSpiderItem
 import math
-import logging
 
 try:
     # Python 2.6-2.7 

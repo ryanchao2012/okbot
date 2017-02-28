@@ -1,7 +1,7 @@
 import json
 from pygments import highlight, lexers, formatters
 from scrapy.exceptions import DropItem
-import logging
+
 class PttSpiderPipeline(object):
     def __init__(self):
         self.title_len = []
@@ -9,8 +9,7 @@ class PttSpiderPipeline(object):
         self.date_len = []
         self.push_len = []
         self.url_len = []
-    # def open_spider(self, spider):
-    #   pass
+
     def process_item(self, item, spider):
         # TODO
         title_len = len(item['title'])
@@ -44,6 +43,6 @@ class PttSpiderPipeline(object):
         colorful_json = highlight(formatted_json, lexers.JsonLexer(), formatters.TerminalFormatter())
         print(colorful_json)
         spider.results = d
-        # with open('abc', 'w') as f:
-        #     f.write(json.dumps(d))
-        #     f.write('\n')
+
+
+

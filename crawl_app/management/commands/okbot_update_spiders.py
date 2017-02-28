@@ -6,6 +6,15 @@ import requests
 import time
 import re
 
+import logging
+logger = logging.getLogger('okbot_update')
+logger.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+chformatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
+ch.setLevel(logging.INFO)
+ch.setFormatter(chformatter)
+logger.addHandler(ch)
+
 class Command(BaseCommand):
     help = 'update the newest index of all spiders'
 
@@ -29,12 +38,18 @@ class Command(BaseCommand):
                 newest.append(last_index)
             except Exception as e:
                 newest.append(-1)
-                print(e)
+                logger.error(e)
 
 
         with transaction.atomic():
             for sp, new_idx in zip(spider, newest):
                 sp.newest = new_idx
+                if new_idx > 0:
+                    sp.status = 'pass'
+                    
+                else:
+                    sp.status = 'debug'
                 sp.save()
 
+        logger.info('command: okbot_update, all jobs finished.')
 
