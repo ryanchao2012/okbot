@@ -108,8 +108,10 @@ class PttSpider(scrapy.Spider):
         item['title'] = ''  
         if self.title_xpath: 
             title = self.extract_first(response, self.title_xpath)
-            # title = re.sub(r'\[[^\]]*\]', '', title).strip()
-            # title = re.sub(r'［[^］]*］', '', title).strip()
+            title_ = re.sub(r'\[[^\]]*\]', '', title).strip()
+            title_ = re.sub(r'［[^］]*］', '', title_).strip()
+            if len(title_) == 0:
+                title = ''
             item['title'] = title
                       
 
