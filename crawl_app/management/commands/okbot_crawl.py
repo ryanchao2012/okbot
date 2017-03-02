@@ -31,6 +31,7 @@ def _crawler_wrapper(f):
         settings.set('FEED_URI', 'crawl_app/spider/output/{}.jl'.format(params['jobid']))
         settings.set('LOG_FILE', 'crawl_app/spider/output/log-{}.txt'.format(params['jobid']))
         
+        print(params['blacklist'])
         process = CrawlerProcess(settings)
         process.crawl(PttSpider, params['tag'], params['entry'], 
             blacklist=params['blacklist'],
@@ -111,7 +112,7 @@ class Command(BaseCommand):
     def _crawl(self, spider, jobid, **kwargs):
         blacklist = {}
 
-        btype = ['title', 'push', 'author']
+        btype = [t[1] for t in Blacklist.BLIST_TYPE_CHOICES[1:]]
         blist = spider.blacklist.all()
         for b in blist:
             type_ = Blacklist.BLIST_TYPE_CHOICES[b.btype][1]

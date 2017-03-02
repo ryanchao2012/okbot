@@ -14,6 +14,7 @@ class Blacklist(models.Model):
         (1, "title"),
         (2, "push"),
         (3, "author"),
+        (4, "audience"),
     )
     btype = models.IntegerField(choices=BLIST_TYPE_CHOICES, default=0, verbose_name=u'type')
     phrases = models.CharField(max_length=4096)
