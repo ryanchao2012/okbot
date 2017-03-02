@@ -108,8 +108,8 @@ class PttSpider(scrapy.Spider):
         item['title'] = ''  
         if self.title_xpath: 
             title = self.extract_first(response, self.title_xpath)
-            title = re.sub(r'\[[^\]]*\]', '', title).strip()
-            title = re.sub(r'［[^］]*］', '', title).strip()
+            # title = re.sub(r'\[[^\]]*\]', '', title).strip()
+            # title = re.sub(r'［[^］]*］', '', title).strip()
             item['title'] = title
                       
 
@@ -117,7 +117,7 @@ class PttSpider(scrapy.Spider):
         item['author'] = ''
         if self.author_xpath: 
             author = self.extract_first(response, self.author_xpath)
-            author = re.sub(r'\([^\)]*\)', '', author).strip()
+            # author = re.sub(r'\([^\)]*\)', '', author).strip()
             if 'author' in self.blacklist:
                 if author not in self.blacklist.get('author'):
                     item['author'] = author
