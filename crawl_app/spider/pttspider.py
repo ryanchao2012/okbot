@@ -42,6 +42,7 @@ class PttSpider(scrapy.Spider):
     author_xpath = '//div[@id="main-content"]/div[@class="article-metaline"][1]/span[@class="article-meta-value"]'
     title_xpath = '//div[@id="main-content"]/div[@class="article-metaline"][2]/span[@class="article-meta-value"]'
     date_xpath = '//div[@id="main-content"]/div[@class="article-metaline"][3]/span[@class="article-meta-value"]'
+    audience_xpath = '//div[@class="push"]/span[@class="f3 hl push-userid"]'
     push_xpath = '//div[@class="push"]/span[@class="f3 push-content"]'
 
     def __init__(self, tag, entry, *args, **kwargs):
@@ -131,15 +132,24 @@ class PttSpider(scrapy.Spider):
 
         # push:
         item['push'] = []
-        if self.push_xpath: 
-            push = self.extract_all(response, self.push_xpath)
-            push = [p[1:].strip() for p in push]
-            if 'push' in self.blacklist:
-                bpush = '|'.join(self.blacklist.get('push'))
-                push = [p for p in push if not re.search(bpush, p)]
-            # item['push'] = sorted(push, key=len, reverse=True)[:30]
-            push = [p for p in push if len(p) > 1]
-            item['push'] = push[:30]
+        if self.push_xpath and self.audience_xpath: 
+            push = [p.strip() for p in self.extract_all(response, self.push_xpath)]
+            audi = self.extract_all(response, self.audience_xpath)
+            push_length = len(push)
+            if len(audi) == push_length:
+                black_idx = []
+                if 'push' in self.blacklist:
+                    bpush = '|'.join(self.blacklist.get('push'))
+                    black_idx.extend([i for i, p in enumerate(push) if re.search(bpush, p)])
+
+                if 'audience' in self.blacklist:
+                    baudi = '|'.join(self.blacklist.get('audience'))
+                    black_idx.extend([i for i, a in enumerate(audi) if re.search(baudi, a)])
+
+                black_idx.extend([i for i, p in enumerate(push) if len(p) < 2])
+                black_idx = set(black_idx)
+                audi_push = [''.join([audi[i], push[i]]) for i in range(push_length) if i not in black_idx]
+                item['push'] = audi_push[:30]
         return item
 
     def extract_first(self, response, pattern):

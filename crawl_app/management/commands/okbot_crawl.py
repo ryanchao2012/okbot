@@ -112,6 +112,7 @@ class Command(BaseCommand):
         blacklist = {}
 
         btype = ['title', 'push', 'author']
+        btype = [t[1] for t in Blacklist.BLIST_TYPE_CHOICES[1:]]
         blist = spider.blacklist.all()
         for b in blist:
             type_ = Blacklist.BLIST_TYPE_CHOICES[b.btype][1]
