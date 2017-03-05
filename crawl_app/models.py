@@ -17,7 +17,7 @@ class Blacklist(models.Model):
         (4, "audience"),
     )
     btype = models.IntegerField(choices=BLIST_TYPE_CHOICES, default=0, verbose_name=u'type')
-    phrases = models.CharField(max_length=4096)
+    phrases = models.CharField(max_length=4095)
 
     def __str__(self):
         return '<{}>{}'.format(self.BLIST_TYPE_CHOICES[self.btype][1], self.phrases[:20])
@@ -27,12 +27,12 @@ class Blacklist(models.Model):
         verbose_name_plural = verbose_name
 
 class Spider(models.Model):
-    tag = models.CharField(max_length=256)
-    entry = models.CharField(max_length=1024)
+    tag = models.CharField(max_length=255)
+    entry = models.CharField(max_length=1023)
     start = models.IntegerField(default=-1)
     end = models.IntegerField(default=-1)
     newest = models.IntegerField(default=-1)
-    status = models.CharField(max_length=256, default='debug')
+    status = models.CharField(max_length=255, default='debug')
     blacklist = models.ManyToManyField(Blacklist, blank=True)
 
     def __str__(self):
@@ -44,10 +44,10 @@ class Spider(models.Model):
 
 
 class Joblog(models.Model):
-    name = models.CharField(max_length=256)
+    name = models.CharField(max_length=255)
     start_time = models.DateTimeField(default=timezone.now)
     finish_time = models.DateTimeField(default=timezone.now, blank=True, null=True)
-    status = models.CharField(max_length=256, default='running')
+    status = models.CharField(max_length=255, default='running')
 
     def __str__(self):
         return '{}'.format(self.name)

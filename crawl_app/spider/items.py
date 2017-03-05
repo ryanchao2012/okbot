@@ -10,7 +10,6 @@ import scrapy
 
 class PttSpiderItem(scrapy.Item):
     # define the fields for your item here like:
-    aid = scrapy.Field()
     title = scrapy.Field()
     date = scrapy.Field()
     author = scrapy.Field()

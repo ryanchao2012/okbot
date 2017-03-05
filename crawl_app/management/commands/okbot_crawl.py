@@ -30,7 +30,6 @@ def _crawler_wrapper(f):
 
         settings.set('FEED_URI', 'crawl_app/spider/output/{}.jl'.format(params['jobid']))
         settings.set('LOG_FILE', 'crawl_app/spider/output/log-{}.txt'.format(params['jobid']))
-        
         process = CrawlerProcess(settings)
         process.crawl(PttSpider, params['tag'], params['entry'], 
             blacklist=params['blacklist'],
@@ -70,7 +69,7 @@ def _crawler_wrapper(f):
 class Command(BaseCommand):
     help = '''
            start crawling ptt by given <spider-tag>.
-           ex: python manage.py okbot_crawl Gossiping
+           ex: python manage.py okbot_crawl <spider-tag>
            '''
     def add_arguments(self, parser):
         parser.add_argument('spider_tag', nargs=1, type=str)

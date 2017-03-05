@@ -108,6 +108,11 @@ class PttSpider(scrapy.Spider):
         item['title'] = ''  
         if self.title_xpath: 
             title = self.extract_first(response, self.title_xpath)
+            if 'title' in self.blacklist:
+                btitle = []
+                btitle.extend(list(self.blacklist.get('title')))
+                if any([t in title for t in btitle]):
+                    title = ''
             title_ = re.sub(r'\[[^\]]*\]', '', title).strip()
             title_ = re.sub(r'［[^］]*］', '', title_).strip()
             if len(title_) == 0:
