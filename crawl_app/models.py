@@ -28,7 +28,7 @@ class Blacklist(models.Model):
 
 class Spider(models.Model):
     tag = models.CharField(max_length=255)
-    entry = models.CharField(max_length=1023)
+    entry = models.CharField(max_length=1023, unique=True)
     start = models.IntegerField(default=-1)
     end = models.IntegerField(default=-1)
     newest = models.IntegerField(default=-1)

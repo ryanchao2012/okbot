@@ -24,6 +24,7 @@ def _crawler_wrapper(f):
         settings.set('USER_AGENT', 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)')
         settings.set('ITEM_PIPELINES', {'crawl_app.spider.pipelines.PttSpiderPipeline' : 400})
         settings.set('FEED_FORMAT', 'jsonlines')
+        settings.set('FEED_EXPORT_ENCODING', 'utf-8')
         settings.set('DOWNLOAD_DELAY', 0.25)
 
         params = f(*args, **kwargs)

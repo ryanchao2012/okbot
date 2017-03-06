@@ -11,7 +11,7 @@ class Post(models.Model):
     title = models.CharField(max_length=255)
     tag = models.CharField(max_length=63, default='', blank=True, null=True)
     spider = models.CharField(max_length=63)
-    url = models.CharField(max_length=1023)
+    url = models.CharField(max_length=1023, unique=True)
     author = models.CharField(max_length=63)
     push = models.TextField()
     publish_date = models.DateTimeField(default=timezone.now)
@@ -28,6 +28,7 @@ class Post(models.Model):
 
 
 class Vocabulary(models.Model):
+    name = models.CharField(max_length=255, unique=True)
     word = models.CharField(max_length=255)
     tokenizer = models.CharField(max_length=255)
     tag = models.CharField(max_length=63, blank=True, null=True)
@@ -39,10 +40,27 @@ class Vocabulary(models.Model):
         verbose_name = _('VOCABULARY')
         verbose_name_plural = verbose_name
 
+    # def get_posts(self):
+    #     return "\n".join([p.title for p in self.post.all()])
+
     def __str__(self):
         return '{}'.format(self.word)
 
 
+
+class Grammar(models.Model):
+    name = models.CharField(max_length=1023, unique=True)
+    sent_tag = models.CharField(max_length=1023)
+    tokenizer = models.CharField(max_length=255)
+    doc_freq = models.IntegerField(default=0)
+    post = models.ManyToManyField(Post, blank=True)
+
+    def __str__(self):
+        return '{}'.format(self.sent_tag)
+
+    class Meta:
+        verbose_name = _('GRAMMAR')
+        verbose_name_plural = verbose_name
 
 class Joblog(models.Model):
     name = models.CharField(max_length=255)
