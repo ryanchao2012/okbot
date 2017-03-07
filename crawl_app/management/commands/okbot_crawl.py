@@ -92,7 +92,6 @@ class Command(BaseCommand):
         try:
             Joblog(name=jobid, start_time=now, status='running').save()
         except Exception as e:
-            pass
             logger.error(e)
             logger.error('command okbot_crawl, fail to create job log')
         self._crawl(spider, jobid)

@@ -5,6 +5,7 @@ import jieba.posseg as pseg
 import collections
 import json
 import time
+import os
 
 from ingest_app.models import Joblog 
 import psycopg2
@@ -17,6 +18,10 @@ chformatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefm
 ch.setFormatter(chformatter)
 logger.addHandler(ch)
 
+
+OKBOT_DB_USER = os.environ['OKBOT_DB_USER']
+OKBOT_DB_NAME = os.environ['OKBOT_DB_NAME']
+OKBOT_DB_PASSWORD = os.environ['OKBOT_DB_PASSWORD']
 
 class Command(BaseCommand):
     help = '''
@@ -39,12 +44,12 @@ class Command(BaseCommand):
 
     idx_vocab = {
         'pk': 0,
-        'word': 1,
-        'tokenizer': 2,
-        'tag': 3,
-        'excluded': 4,
+        'name': 1,
+        'word': 2,
+        'tokenizer': 3,
+        'tag': 4,
         'doc_freq': 5,
-        'name': 6
+        'excluded': 6
     }
 
     idx_vocab2post = {
@@ -55,10 +60,10 @@ class Command(BaseCommand):
 
     idx_grammar = {
         'pk': 0,
-        'sent_tag': 1,
-        'tokenizer': 2,
-        'doc_freq': 3,
-        'name': 4
+        'name': 1,
+        'sent_tag': 2,
+        'tokenizer': 3,
+        'doc_freq': 4
     }
 
 
@@ -81,7 +86,8 @@ class Command(BaseCommand):
                     i = 0
                     buffer_ = [None] * batch_size
 
-            yield [self._parse(l_) for l_ in buffer_[:i]]
+            parsed = [self._parse(l_) for l_ in buffer_[:i]]
+            yield [ps for ps in parsed if ps]
          
 
     def _parse(self, line):
@@ -130,6 +136,7 @@ class Command(BaseCommand):
     
     def _upsert_post(self, batch_post):
         n_ = len(batch_post)
+
         title = [p['title'] for p in batch_post]
         url = [p['url'] for p in batch_post]
         tag = [p['tag'] for p in batch_post]
@@ -143,7 +150,6 @@ class Command(BaseCommand):
 
         post_query = self._query_post(batch_post)
 
-        
         for i_, q in enumerate(post_query):
             if len(q[self.idx_post['push']]) == len(push[i_]):
                 allow_update[i_] = False
@@ -202,9 +208,10 @@ class Command(BaseCommand):
         post_sent_tag = [p['title_grammar'] for p in batch_post]
 
         grammar2post = [(grammar_guery[grammar_sent_tag.index(post_sent_tag[i_])][self.idx_grammar['pk']] , q[self.idx_post['pk']]) for i_, q in enumerate(post_query)]
-        
+
         grammar_id = [g2p[0] for g2p in grammar2post]
         post_id = [g2p[1] for g2p in grammar2post]
+
         SQL = '''
         INSERT INTO ingest_app_grammar_post (grammar_id, post_id)
         SELECT unnest( %(grammar_id)s ), unnest( %(post_id)s )
@@ -212,9 +219,9 @@ class Command(BaseCommand):
         '''
         self.cur.execute(SQL, locals())
         self.conn.commit()
-        
+
         self._update_grammar_df(grammar_id)
-    
+
     def _update_grammar_df(self, grammar_id):
         self.cur.execute("SELECT grammar_id FROM ingest_app_grammar_post WHERE grammar_id IN %s;", (tuple(grammar_id),))
         grammar2post_tuple = self.cur.fetchall()
@@ -242,7 +249,7 @@ class Command(BaseCommand):
         tokenizer = [g[2] for g in groups]
         excluded = [False] * n_
         doc_freq = [-1] * n_
-        
+
         SQL = '''
             INSERT INTO ingest_app_vocabulary(name, word, tokenizer, tag, excluded, doc_freq) 
             SELECT unnest( %(name)s ), unnest( %(word)s ), unnest( %(tokenizer)s ), unnest( %(tag)s ), unnest( %(excluded)s ), unnest( %(doc_freq)s )
@@ -271,10 +278,11 @@ class Command(BaseCommand):
 
         vocabulary_id = [v2p[0] for v2p in flatten_vocab2post]
         post_id = [v2p[1] for v2p in flatten_vocab2post]
+
         SQL = '''
         INSERT INTO ingest_app_vocabulary_post (vocabulary_id, post_id)
         SELECT unnest( %(vocabulary_id)s ), unnest( %(post_id)s )
-        ON CONFLICT DO NOTHING         
+        ON CONFLICT DO NOTHING
         '''
 
         self.cur.execute(SQL, locals())
@@ -299,11 +307,10 @@ class Command(BaseCommand):
         try:
             Joblog(name=jobid, start_time=now, status='running').save()
         except Exception as e:
-            pass
             logger.error(e)
             logger.error('command okbot_ingest, fail to create job log')
 
-        self.conn = psycopg2.connect(database='tripper', user='tripper')
+        self.conn = psycopg2.connect(database=OKBOT_DB_NAME, user=OKBOT_DB_USER, password=OKBOT_DB_PASSWORD)
         self.cur = self.conn.cursor()
 
 

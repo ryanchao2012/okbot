@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'chat_app',
     'crawl_app',
+    'ingest_app',
 ]
 
 MIDDLEWARE = [
