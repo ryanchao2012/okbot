@@ -25,7 +25,7 @@ SECRET_KEY = os.environ['OKBOT_JD_SECRET_KEY']
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = False
 
-ALLOWED_HOSTS = ['13.113.82.212', 'okbot.ml', 'www.okbot.ml']
+ALLOWED_HOSTS = ['okbot.ml', 'www.okbot.ml']
 
 
 # Application definition
@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'chat_app',
     'crawl_app',
     'ingest_app',
+    'query_app'
 ]
 
 MIDDLEWARE = [

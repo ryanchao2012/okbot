@@ -23,7 +23,7 @@ class Post(models.Model):
         verbose_name_plural = verbose_name
 
     def __str__(self):
-        return '{}'.format(self.title[:20])
+        return '<{}>{}'.format(self.spider, self.title[:20])
     
 
 
@@ -75,9 +75,4 @@ class Joblog(models.Model):
         verbose_name = _('JOB LOG')
         verbose_name_plural = verbose_name
 
-
-
-
-
-
-    
+ 

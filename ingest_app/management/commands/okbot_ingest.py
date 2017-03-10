@@ -128,8 +128,9 @@ class Command(BaseCommand):
         url = [p['url'] for p in batch_post]
         self.cur.execute("SELECT * FROM ingest_app_post WHERE url IN %s;", (tuple(url),))
         post_query = self.cur.fetchall()
-        post_query_ = [None] * len(post_query)
+        post_query_ = [None] * len(batch_post)
         for q in post_query:
+            idx = url.index(q[self.idx_post['url']])
             post_query_[url.index(q[self.idx_post['url']])] = q
         # batch_post_idx = [url.index(q[self.idx_post['url']]) for q in post_query]
         return post_query_
@@ -151,8 +152,9 @@ class Command(BaseCommand):
         post_query = self._query_post(batch_post)
 
         for i_, q in enumerate(post_query):
-            if len(q[self.idx_post['push']]) == len(push[i_]):
-                allow_update[i_] = False
+            if q:
+                if len(q[self.idx_post['push']]) == len(push[i_]):
+                    allow_update[i_] = False
 
         SQL = '''
             INSERT INTO ingest_app_post(title, tag, spider, url, author, push, publish_date, last_update, update_count, allow_update) 
@@ -205,6 +207,9 @@ class Command(BaseCommand):
         grammar_guery = self.cur.fetchall()
         grammar_sent_tag = [g[self.idx_grammar['sent_tag']] for g in grammar_guery]
         post_query = self._query_post(batch_post)
+        if len(post_query) != len(batch_post):
+            logger.error('command okbot_ingest, post_query and batch_post length doesn\'t match.')
+            raise QueryLengthDoesNotMatchException
         post_sent_tag = [p['title_grammar'] for p in batch_post]
 
         grammar2post = [(grammar_guery[grammar_sent_tag.index(post_sent_tag[i_])][self.idx_grammar['pk']] , q[self.idx_post['pk']]) for i_, q in enumerate(post_query)]
@@ -264,6 +269,9 @@ class Command(BaseCommand):
         self.cur.execute("SELECT * FROM ingest_app_vocabulary WHERE name IN %s;", (tuple(tok_name),))
         vocab_query = self.cur.fetchall()
         post_query = self._query_post(batch_post)
+        if len(post_query) != len(batch_post):
+            logger.error('command okbot_ingest, post_query and batch_post length doesn\'t match.')
+            raise QueryLengthDoesNotMatchException
 
         title_tok_name = [['--+--'.join([k.word, k.flag, self.tok_tag]) for k in p['title_tok']] for p in batch_post]
 
@@ -352,6 +360,8 @@ class Command(BaseCommand):
         job.save()
 
 
+class QueryLengthDoesNotMatchException(Exception):
+    pass
 
 class TokenizerNotExistException(Exception):
     pass
