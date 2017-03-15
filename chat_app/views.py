@@ -6,8 +6,11 @@ import requests
 import os
 import time
 import random 
-
+import jieba.posseg as pseg
+import psycopg2
 import logging
+
+
 logger = logging.getLogger('okbot_chat_view')
 logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
@@ -15,6 +18,13 @@ chformatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefm
 ch.setLevel(logging.INFO)
 ch.setFormatter(chformatter)
 logger.addHandler(ch)
+
+
+OKBOT_DB_USER = os.environ['OKBOT_DB_USER']
+OKBOT_DB_NAME = os.environ['OKBOT_DB_NAME']
+OKBOT_DB_PASSWORD = os.environ['OKBOT_DB_PASSWORD']
+CONNECT = psycopg2.connect(database=OKBOT_DB_NAME, user=OKBOT_DB_USER, password=OKBOT_DB_PASSWORD)
+CURSOR = CONNECT.cursor()
 
 
 OKBOT_PAGE_ACCESS_KEY=os.environ['OKBOT_PAGE_ACCESS_KEY']
@@ -66,19 +76,23 @@ def fb_webhook(request):
                 sender_id = message_evt.get('sender').get('id')
                 if 'message' in message_evt:
                     send_typing_bubble(sender_id, True)
-                    time.sleep(random.randint(1,5))
-                    send_typing_bubble(sender_id, False)
-                    handle_message(sender_id, message_evt.get('message'))
-        
+                    msg = message_evt.get('message')
+                    if 'text' in msg:
+                        text = msg.get('text')
+                        # time.sleep(random.randint(1,5))
+                        handle_message(sender_id, text)
+                        # print('*********', _chat_query(text))
+    send_typing_bubble(sender_id, False)
     return HttpResponse()
 
 
+
+
+
 @graph_api_post
-def handle_message(sender_id, msg):
-    query, reply = '', ''
-    if 'text' in msg:
-        query = msg.get('text')
-        reply = query
+def handle_message(sender_id, text='哈哈'):
+    query = text
+    reply = _chat_query(query)
 
     data = json.dumps({
         "recipient": {
@@ -90,7 +104,7 @@ def handle_message(sender_id, msg):
     })
     return data, 'reply message: query: {}, reply: {}'.format(query, reply)
 
-
+    
 @graph_api_post
 def send_typing_bubble(sender_id, onoff=False):
     if onoff:
@@ -104,4 +118,44 @@ def send_typing_bubble(sender_id, onoff=False):
         }
     })
     return data, 'send typing bubble: {}.'.format(typing)
-    
+
+
+def _chat_query(text):
+    try:
+        pairs = {e for e in list(pseg.cut(text)) if len(e.word.strip()) > 0}
+        wlist1 = list({v.word for v in pairs})
+        vocab_name = list({'--+--'.join([v.word, v.flag, 'jieba']) for v in pairs})
+
+        CURSOR.execute("SELECT id FROM ingest_app_vocabulary WHERE name IN %s;", (tuple(vocab_name),))
+        vocab_id = [v[0] for v in CURSOR.fetchall()]
+
+        CURSOR.execute("SELECT post_id FROM ingest_app_vocabulary_post WHERE vocabulary_id IN %s;", (tuple(vocab_id),))
+        post_id = [p[0] for p in CURSOR.fetchall()]
+
+        CURSOR.execute("SELECT push, tokenized FROM ingest_app_post WHERE id IN %s;", (tuple(post_id),))
+        post = [p for p in CURSOR.fetchall()]
+
+        pscore = [None] * len(post)
+        for i in range(len(post)):
+            wlist2 = post[i][1].split()
+            pscore[i] = _jaccard(wlist1, wlist2)
+
+        top_post = post[pscore.index(max(pscore))]
+        push = [p[p.find(':')+1 :].strip() for p in top_post[0].split('\n')]
+        select_push = push[random.randint(0, len(push)-1)]
+        return select_push
+
+    except Exception as e:
+        CONNECT.rollback()
+        logger.error(e)
+        return 'Q_Q'
+
+
+
+def _jaccard(wlist1, wlist2):
+    wset1 = set(wlist1)
+    wset2 = set(wlist2)
+    return len(wset1.intersection(wset2)) / len(set(wlist1 + wlist2))
+
+
+

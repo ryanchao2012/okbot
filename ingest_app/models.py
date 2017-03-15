@@ -18,6 +18,7 @@ class Post(models.Model):
     last_update = models.DateTimeField(default=timezone.now)
     update_count = models.IntegerField(default=0)
     allow_update = models.BooleanField(default=True)
+    tokenized = models.CharField(max_length=255)
     class Meta:
         verbose_name = _('POST')
         verbose_name_plural = verbose_name

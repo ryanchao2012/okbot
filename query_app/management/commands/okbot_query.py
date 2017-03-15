@@ -1,5 +1,8 @@
 from django.core.management.base import BaseCommand, CommandError
 import jieba.posseg as pseg
+import psycopg2
+
+import os
 
 OKBOT_DB_USER = os.environ['OKBOT_DB_USER']
 OKBOT_DB_NAME = os.environ['OKBOT_DB_NAME']
@@ -26,20 +29,20 @@ class Command(BaseCommand):
         wlist1 = list({v.word for v in pairs})
         vocab_name = list({'--+--'.join([v.word, v.flag, tokenizer]) for v in pairs})
 
-        self.cur.execute("SELECT id FROM ingest_app_vocabulary WHERE name IN %s AND doc_freq < 50;", (tuple(vocab_name),))
+        self.cur.execute("SELECT id FROM ingest_app_vocabulary WHERE name IN %s;", (tuple(vocab_name),))
+
         vocab_id = [v[0] for v in self.cur.fetchall()]
 
         self.cur.execute("SELECT post_id FROM ingest_app_vocabulary_post WHERE vocabulary_id IN %s;", (tuple(vocab_id),))
         post_id = [p[0] for p in self.cur.fetchall()]
 
-        self.cur.execute("SELECT (title, push) FROM ingest_app_post WHERE id IN %s;", (tuple(post_id),))
+        self.cur.execute("SELECT push, tokenized FROM ingest_app_post WHERE id IN %s;", (tuple(post_id),))
 
-        post = [[p for p in self.cur.fetchall()]]
+        post = [p for p in self.cur.fetchall()]
 
         pscore = [None] * len(post)
-        for i in len(post):
-            pairs = {e for e in list(pseg.cut(post[i][0])) if len(e.word.strip()) > 0}
-            wlist2 = list({v.word for v in pairs})
+        for i in range(len(post)):
+            wlist2 = post[i][1].split()
             pscore[i] = _jaccard(wlist1, wlist2)
 
         top_post = post[pscore.index(max(pscore))]

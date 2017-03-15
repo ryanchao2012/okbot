@@ -13,6 +13,7 @@ class PostAdmin(admin.ModelAdmin):
 
 class VocabularyAdmin(admin.ModelAdmin):
     list_display = ('name', 'doc_freq', 'excluded')
+    list_editable = ('excluded',)
     readonly_fields = ('post',)
     search_fields = ('name',)
 
