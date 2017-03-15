@@ -20,4 +20,5 @@ import chat_app.views
 urlpatterns = [
     url(r'^dugout/', admin.site.urls),
     url(r'^chatwithme/', chat_app.views.fb_webhook, name='chatwithme')
+    url(r'^linecallback/', chat_app.views.line_webhook, name='linecallback')
 ]
