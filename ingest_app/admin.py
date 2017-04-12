@@ -31,7 +31,7 @@ class JoblogAdmin(admin.ModelAdmin):
         return False
 
 
-admin.site.register(Post, PostAdmin)
+# admin.site.register(Post, PostAdmin)
 admin.site.register(Vocabulary, VocabularyAdmin)
 admin.site.register(Joblog, JoblogAdmin)
 admin.site.register(Grammar, GrammarAdmin)

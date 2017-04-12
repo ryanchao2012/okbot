@@ -76,10 +76,16 @@ def line_webhook(request):
         for event in events:
             if isinstance(event, MessageEvent):
                 if isinstance(event.message, TextMessage):
-                    line_bot_api.reply_message(
-                        event.reply_token,
-                        TextSendMessage(text=_chat_query(event.message.text)) 
-                    )
+                    try:
+                        query = event.message.text
+                        reply = _chat_query(query)
+                        logger.info('reply message: query: {}, reply: {}'.format(query, reply))
+                        line_bot_api.reply_message(
+                            event.reply_token,
+                            TextSendMessage(text=reply) 
+                        )
+                    except Exception as e:
+                        logger.error('okbot.chat_app.line_webhook, message: {}'.format(e))
 
         return HttpResponse()
     else:
@@ -155,7 +161,7 @@ def _chat_query(text):
         wlist1 = list({v.word for v in pairs})
         vocab_name = list({'--+--'.join([v.word, v.flag, 'jieba']) for v in pairs})
 
-        CURSOR.execute("SELECT id FROM ingest_app_vocabulary WHERE name IN %s;", (tuple(vocab_name),))
+        CURSOR.execute("SELECT id FROM ingest_app_vocabulary WHERE name IN %s AND excluded = False;", (tuple(vocab_name),))
         vocab_id = [v[0] for v in CURSOR.fetchall()]
 
         CURSOR.execute("SELECT post_id FROM ingest_app_vocabulary_post WHERE vocabulary_id IN %s;", (tuple(vocab_id),))

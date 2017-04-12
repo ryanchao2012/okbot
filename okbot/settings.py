@@ -41,7 +41,8 @@ INSTALLED_APPS = [
     'chat_app',
     'crawl_app',
     'ingest_app',
-    'query_app'
+    'query_app',
+    'train_app',
 ]
 
 MIDDLEWARE = [

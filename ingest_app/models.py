@@ -18,14 +18,18 @@ class Post(models.Model):
     last_update = models.DateTimeField(default=timezone.now)
     update_count = models.IntegerField(default=0)
     allow_update = models.BooleanField(default=True)
-    tokenized = models.CharField(max_length=255)
+    tokenized = models.CharField(max_length=255, blank=True, null=True)
+    structure = models.CharField(max_length=63, blank=True, null=True)
+    entity = models.CharField(max_length=63, blank=True, null=True)
+    verb = models.CharField(max_length=63, blank=True, null=True)
+
     class Meta:
         verbose_name = _('POST')
         verbose_name_plural = verbose_name
 
     def __str__(self):
         return '<{}>{}'.format(self.spider, self.title[:20])
-    
+
 
 
 class Vocabulary(models.Model):
