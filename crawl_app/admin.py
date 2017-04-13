@@ -19,7 +19,7 @@ class BlacklistAdmin(admin.ModelAdmin):
 
 class JoblogAdmin(admin.ModelAdmin):
     list_display = ('name', 'start_time', 'finish_time', 'status')
-    readonly_fields = ('name', 'start_time', 'finish_time', 'status')
+    readonly_fields = ('name', 'start_time', 'result', 'finish_time', 'status')
     def has_add_permission(self, request):
         return False
 

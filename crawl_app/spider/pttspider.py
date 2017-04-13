@@ -18,12 +18,15 @@ class PttSpider(scrapy.Spider):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.85 Safari/537.36'
     }
+    max_push_num = 30
 
     start_idx = -1
     end_idx = -1
 
     reReplacePat = [
-        (re.compile(r'<[^>]*>'), r''), #(re.compile(r'(<br\s?/>)+'), r'\n'),
+        (re.compile(r'<[^>]*>'), r''), 
+        (re.compile(r'(<br\s?/>)+'), r'\n'),
+        (re.compile(r'(\s*[\r|\n|\t]+\s*)+'), r'\n'),
         # (re.compile(r'\[[^\]]*\]'), r''),
         # (re.compile(r'\([^\)]*\)'), r''),
         # (re.compile(r'［[^］]*］'), r''),
@@ -44,6 +47,8 @@ class PttSpider(scrapy.Spider):
     date_xpath = '//div[@id="main-content"]/div[@class="article-metaline"][3]/span[@class="article-meta-value"]'
     audience_xpath = '//div[@class="push"]/span[@class="f3 hl push-userid"]'
     push_xpath = '//div[@class="push"]/span[@class="f3 push-content"]'
+    content_xpath = '//div[@id="main-content"]'
+    content_end = r'\n-+\n'
 
     def __init__(self, tag, entry, *args, **kwargs):
         super(PttSpider, self).__init__(*args, **kwargs)
@@ -55,16 +60,6 @@ class PttSpider(scrapy.Spider):
             if self.__getattribute__(k) is not None:
                 self.__setattr__(k, v)
 
-        # if 'blacklist' in kwargs:
-        #     blist = kwargs.get('blacklist')
-        #     if isinstance(blist, dict):
-        #         self.blacklist = blist
-
-        # if 'url_xpath' in kwargs:
-        #     xpath = kwargs.get('url_xpath')
-        #     if isinstance(xpath, str): 
-        #         self.url_xpath = xpath
-
 
     def start_requests(self):
         if self.start_idx <= 0 or self.end_idx <= 0:
@@ -75,12 +70,6 @@ class PttSpider(scrapy.Spider):
             else:
                 for idx in range(self.start_idx, self.end_idx + 1):
                     yield scrapy.Request(self.entry.format(index=idx), callback=self.parse, headers=self.headers, cookies={'over18': 1})
-
-        # if self.num_page:
-        #     for i in range(self.num_page):
-        #         url = self.entry + str(i + 1)
-        #         yield self.make_requests_from_url(url)
-        # else:
         
 
     def parse(self, response):
@@ -98,7 +87,7 @@ class PttSpider(scrapy.Spider):
             request = scrapy.Request(url, callback=self.parse_dir_contents, headers=self.headers, cookies={'over18': 1})
             request.meta['item'] = item
             yield request
-        # return PttSpider.parse(response, self.url_xpath, self.parse_dir_contents)
+
 
     def parse_dir_contents(self, response):
         if 'item' not in response.meta: item = PttSpiderItem()
@@ -156,7 +145,20 @@ class PttSpider(scrapy.Spider):
                 black_idx.extend([i for i, p in enumerate(push) if len(p) < 2])
                 black_idx = set(black_idx)
                 audi_push = [''.join([audi[i], push[i]]) for i in range(push_length) if i not in black_idx]
-                item['push'] = audi_push[:30]
+                item['push'] = audi_push[:self.max_push_num]
+
+
+        item['content'] = ''
+        if self.content_xpath and len(item['date']) > 0:
+            dirty_content = response.xpath(self.content_xpath).extract_first(default='')
+            mstart = re.search(item['date'], dirty_content)
+            mend = re.search(self.content_end, dirty_content)
+            if mstart and mend:
+                istart = mstart.end()
+                iend = mend.start()
+                if iend > istart:
+                    item['content'] = self.__clean_html(dirty_content[istart : iend])
+
         return item
 
     def extract_first(self, response, pattern):

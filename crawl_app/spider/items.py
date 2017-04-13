@@ -15,4 +15,5 @@ class PttSpiderItem(scrapy.Item):
     author = scrapy.Field()
     push = scrapy.Field()
     url = scrapy.Field()
+    content = scrapy.Field()
     pass

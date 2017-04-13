@@ -3,6 +3,7 @@ from scrapy.crawler import CrawlerProcess
 from scrapy.settings import Settings
 from django.utils import timezone
 import time
+import json
 
 import logging
 logger = logging.getLogger('okbot_crawl')
@@ -37,6 +38,7 @@ def _crawler_wrapper(f):
             start_idx=params['start_idx'],
             end_idx=params['end_idx']
         )
+
         logger.info('okbot crawl job start. target: {}, from {} to {}.'.format(params['tag'], params['start_idx'], params['end_idx']))
 
         t = time.time()
@@ -46,22 +48,22 @@ def _crawler_wrapper(f):
         now = timezone.now()
         try:
             job = Joblog.objects.get(name=params['jobid'])
+            # job.result = json.dumps(result, indent = 4)
+            job.finish_time = now
+            
         except Exception as e:
+            msg = 'command okbot_crawl, fail to fetch job log. id: {}. create a new one'.format(params['jobid'])
             logger.error(e)
-            logger.error('command okbot_crawl, fail to fetch job log. id: {}. create a new one'.format(params['jobid']))
-            try:
-                
-                job = Joblog(name=params['jobid'], start_time=now, finish_time=now, status='finished')
+            logger.error(msg)            
+            try:                
+                job = Joblog(name=params['jobid'], start_time=now)
+                # job.result = '\n'.join([e, msg])
             except Exception as e:
                 logger.error(e)
                 logger.error('command okbot_crawl, fail to create job log')
                 return
-
-        job.finish_time = now
         job.status = 'finished'
         job.save()
-
-
 
     return crawler_wrapper_
 

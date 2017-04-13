@@ -46,7 +46,8 @@ class Spider(models.Model):
 class Joblog(models.Model):
     name = models.CharField(max_length=255)
     start_time = models.DateTimeField(default=timezone.now)
-    finish_time = models.DateTimeField(default=timezone.now, blank=True, null=True)
+    finish_time = models.DateTimeField(blank=True, null=True)
+    result = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=255, default='running')
 
     def __str__(self):
