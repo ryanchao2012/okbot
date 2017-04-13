@@ -26,11 +26,11 @@ logger.addHandler(ch)
 
 line_bot_api = LineBotApi(os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
 line_webhook_parser = WebhookParser(os.environ['LINE_CHANNEL_SECRET'])
-OKBOT_DB_USER = os.environ['OKBOT_DB_USER']
-OKBOT_DB_NAME = os.environ['OKBOT_DB_NAME']
-OKBOT_DB_PASSWORD = os.environ['OKBOT_DB_PASSWORD']
-CONNECT = psycopg2.connect(database=OKBOT_DB_NAME, user=OKBOT_DB_USER, password=OKBOT_DB_PASSWORD)
-CURSOR = CONNECT.cursor()
+# OKBOT_DB_USER = os.environ['OKBOT_DB_USER']
+# OKBOT_DB_NAME = os.environ['OKBOT_DB_NAME']
+# OKBOT_DB_PASSWORD = os.environ['OKBOT_DB_PASSWORD']
+# CONNECT = psycopg2.connect(database=OKBOT_DB_NAME, user=OKBOT_DB_USER, password=OKBOT_DB_PASSWORD)
+# CURSOR = CONNECT.cursor()
 
 
 OKBOT_PAGE_ACCESS_KEY=os.environ['OKBOT_PAGE_ACCESS_KEY']
@@ -156,34 +156,35 @@ def send_typing_bubble(sender_id, onoff=False):
 
 
 def _chat_query(text):
-    try:
-        pairs = {e for e in list(pseg.cut(text)) if len(e.word.strip()) > 0}
-        wlist1 = list({v.word for v in pairs})
-        vocab_name = list({'--+--'.join([v.word, v.flag, 'jieba']) for v in pairs})
+    return '滾喇'
+    # try:
+    #     pairs = {e for e in list(pseg.cut(text)) if len(e.word.strip()) > 0}
+    #     wlist1 = list({v.word for v in pairs})
+    #     vocab_name = list({'--+--'.join([v.word, v.flag, 'jieba']) for v in pairs})
 
-        CURSOR.execute("SELECT id FROM ingest_app_vocabulary WHERE name IN %s AND excluded = False;", (tuple(vocab_name),))
-        vocab_id = [v[0] for v in CURSOR.fetchall()]
+    #     CURSOR.execute("SELECT id FROM ingest_app_vocabulary WHERE name IN %s AND excluded = False;", (tuple(vocab_name),))
+    #     vocab_id = [v[0] for v in CURSOR.fetchall()]
 
-        CURSOR.execute("SELECT post_id FROM ingest_app_vocabulary_post WHERE vocabulary_id IN %s;", (tuple(vocab_id),))
-        post_id = [p[0] for p in CURSOR.fetchall()]
+    #     CURSOR.execute("SELECT post_id FROM ingest_app_vocabulary_post WHERE vocabulary_id IN %s;", (tuple(vocab_id),))
+    #     post_id = [p[0] for p in CURSOR.fetchall()]
 
-        CURSOR.execute("SELECT push, tokenized FROM ingest_app_post WHERE id IN %s;", (tuple(post_id),))
-        post = [p for p in CURSOR.fetchall()]
+    #     CURSOR.execute("SELECT push, tokenized FROM ingest_app_post WHERE id IN %s;", (tuple(post_id),))
+    #     post = [p for p in CURSOR.fetchall()]
 
-        pscore = [None] * len(post)
-        for i in range(len(post)):
-            wlist2 = post[i][1].split()
-            pscore[i] = _jaccard(wlist1, wlist2)
+    #     pscore = [None] * len(post)
+    #     for i in range(len(post)):
+    #         wlist2 = post[i][1].split()
+    #         pscore[i] = _jaccard(wlist1, wlist2)
 
-        top_post = post[pscore.index(max(pscore))]
-        push = [p[p.find(':')+1 :].strip() for p in top_post[0].split('\n')]
-        select_push = push[random.randint(0, len(push)-1)]
-        return select_push
+    #     top_post = post[pscore.index(max(pscore))]
+    #     push = [p[p.find(':')+1 :].strip() for p in top_post[0].split('\n')]
+    #     select_push = push[random.randint(0, len(push)-1)]
+    #     return select_push
 
-    except Exception as e:
-        CONNECT.rollback()
-        logger.error(e)
-        return 'Q_Q'
+    # except Exception as e:
+    #     CONNECT.rollback()
+    #     logger.error(e)
+    #     return 'Q_Q'
 
 
 
