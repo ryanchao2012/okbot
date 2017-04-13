@@ -31,7 +31,7 @@ def _crawler_wrapper(f):
         params = f(*args, **kwargs)
 
         settings.set('FEED_URI', 'crawl_app/spider/output/{}.jl'.format(params['jobid']))
-        settings.set('LOG_FILE', 'crawl_app/spider/output/log-{}.txt'.format(params['jobid']))
+        settings.set('LOG_FILE', 'crawl_app/spider/output/log/log-{}.txt'.format(params['jobid']))
         process = CrawlerProcess(settings)
         process.crawl(PttSpider, params['tag'], params['entry'], 
             blacklist=params['blacklist'],
