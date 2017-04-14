@@ -1,6 +1,7 @@
 import json
 from pygments import highlight, lexers, formatters
 from scrapy.exceptions import DropItem
+import numpy as np
 
 class PttSpiderPipeline(object):
     def __init__(self):
@@ -10,6 +11,7 @@ class PttSpiderPipeline(object):
         self.push_len = []
         self.url_len = []
         self.content_len = []
+        self.drop_num = 0
 
     def process_item(self, item, spider):
         # TODO
@@ -21,6 +23,7 @@ class PttSpiderPipeline(object):
         content_len = len(item['content'])
 
         if not all([title_len, author_len, date_len, url_len, push_len, content_len]):
+            self.drop_num += 1
             raise DropItem()
         else:
             self.title_len.append(title_len)
@@ -30,20 +33,23 @@ class PttSpiderPipeline(object):
             self.push_len.append(push_len)
             self.content_len.append(content_len)
             return item
-
+    def _calc_distribution(self, ls):
+        arr = np.asarray(ls)
+        return arr.mean(), arr.std()
     def close_spider(self, spider):
-        f = lambda ls: float(sum(i > 0 for i in ls))
+        # f = lambda ls: sum(ls) / float(len(ls))
         name = spider.tag
         num = len(self.title_len)
         d = {}
         d['name'] = name
         d['item_num'] = '{:d}'.format(num)
-        d['title_rate'] = '{:.2f}%'.format( 100 * f(self.title_len) / num)
-        d['url_rate'] = '{:.2f}%'.format( 100 * f(self.url_len) / num)
-        d['author_rate'] = '{:.2f}%'.format( 100 * f(self.author_len) / num)
-        d['date_rate'] = '{:.2f}%'.format( 100 * f(self.date_len) / num)
-        d['push_rate'] = '{:.2f}%'.format( 100 * f(self.push_len) / num)
-        d['content_rate'] = '{:.2f}%'.format( 100 * f(self.content_len) / num)
+        d['drop_num'] = '{:d}'.format(self.drop_num)
+        d['title'] = 'mean: {:.1f}, std: {:.1f}'.format( *self._calc_distribution(self.title_len) )
+        d['url'] = 'mean: {:.1f}, std: {:.1f}'.format( *self._calc_distribution(self.url_len) )
+        d['author'] = 'mean: {:.1f}, std: {:.1f}'.format( *self._calc_distribution(self.author_len) )
+        d['date'] = 'mean: {:.1f}, std: {:.1f}'.format( *self._calc_distribution(self.date_len) )
+        d['push'] = 'mean: {:.1f}, std: {:.1f}'.format( *self._calc_distribution(self.push_len) )
+        d['content'] = 'mean: {:.1f}, std: {:.1f}'.format( *self._calc_distribution(self.content_len) )
         # d['title_len'] = ', '.join([str(a) for a in self.title_len])
         # d['url_len'] = ', '.join([str(a) for a in self.url_len])
         # d['author_len'] = ', '.join([str(a) for a in self.author_len])
