@@ -3,46 +3,67 @@ import time
 import os
 
 
-class PsqlQuery(object):
-    OKBOT_DB_USER = os.environ['OKBOT_DB_USER']
-    OKBOT_DB_NAME = os.environ['OKBOT_DB_NAME']
-    OKBOT_DB_PASSWORD = os.environ['OKBOT_DB_PASSWORD']
+class PsqlAbstract(object):
+    DB_USER = os.environ['OKBOT_DB_USER']
+    DB_NAME = os.environ['OKBOT_DB_NAME']
+    DB_PASSWORD = os.environ['OKBOT_DB_PASSWORD']
 
     def __init__(self, username=None, db=None, password=None):
-        self.user = username or self.OKBOT_DB_USER
-        self.db = db or self.OKBOT_DB_NAME
-        self.pw = password or self.OKBOT_DB_PASSWORD
+        self.user = username or self.DB_USER
+        self.db = db or self.DB_NAME
+        self.pw = password or self.DB_PASSWORD
+
+    def session(func):
+        def _wrapper(self, *args, **kwargs):
+            connect = psycopg2.connect(database=self.db, user=self.user, password=self.pw)
+            cursor = connect.cursor()
+            ret = func(self, cursor, **kwargs)
+            cursor.close()
+            connect.close()
+            return ret
+
+        return _wrapper
+
+class PsqlQuery(PsqlAbstract):
+    # OKBOT_DB_USER = os.environ['OKBOT_DB_USER']
+    # OKBOT_DB_NAME = os.environ['OKBOT_DB_NAME']
+    # OKBOT_DB_PASSWORD = os.environ['OKBOT_DB_PASSWORD']
+
+    def __init__(self, username=None, db=None, password=None):
+        super(self.__class__, self).__init__(username=username, db=db, password=password)
         self.schema = {}
 
-    def execute(self, query_string, query_tuple=None):
-        self._get_schema(query_string, query_tuple)
-        return self._execute(query_string, query_tuple)
+    def query(self, q, data=None, skip=False):
+        if not skip:
+            self._get_schema(query_=q, data=data)
+        return self._query(query_=q, data=data)
 
-    def _get_schema(self, query_string, query_tuple=None):
-        connect = psycopg2.connect(database=self.db, user=self.user, password=self.pw)
-        cursor = connect.cursor()
-        idx_semic = query_string.find(';')
-        if idx_semic > 0:
-            query_string = query_string[:idx_semic]
-        danger_query = query_string + ' LIMIT 0'
-        print(danger_query)
-        print(cursor.mogrify(danger_query, query_tuple))
-        cursor.execute(danger_query, query_tuple)
+    @PsqlAbstract.session
+    def _get_schema(self, cursor, query_=None, data=None):
+        if query_ is None:
+            return
+        # connect = psycopg2.connect(database=self.db, user=self.user, password=self.pw)
+        # cursor = connect.cursor()
+        idx_semicln = query_.find(';')
+        if idx_semicln > 0:
+            query_ = query_[:idx_semicln]
+        query_ += ' LIMIT 0;'
+        cursor.execute(query_, data)
         schema = [desc[0] for desc in cursor.description]
-        print('Warning: schema changed:', schema)
-        cursor.close()
-        connect.close()
+        # print('Warning: schema changed:', schema)
+        # cursor.close()
+        # connect.close()
         self.schema = {k: v for v, k in enumerate(schema)}
-    def _execute(self, query_string, query_tuple=None):
-        connect = psycopg2.connect(database=self.db, user=self.user, password=self.pw)
-        cursor = connect.cursor()
-        cursor.execute(query_string, query_tuple)
-#        first = cursor.fetchone()
-#        self.schema = 1 # [desc[0] for desc in cursor.description]
-#        print(self.schema)
-#        yield first
+
+    @PsqlAbstract.session
+    def _query(self, cursor, query_=None, data=None):
+        if query_ is None:
+            return
+        # connect = psycopg2.connect(database=self.db, user=self.user, password=self.pw)
+        # cursor = connect.cursor()
+        cursor.execute(query_, data)
         for record in cursor:
             yield record
-        cursor.close()
-        connect.close()
+        # cursor.close()
+        # connect.close()
 
