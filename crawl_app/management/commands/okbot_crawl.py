@@ -19,7 +19,7 @@ from crawl_app.spider.pttspider import PttSpider
 
 
 def _crawler_wrapper(f):
-    def crawler_wrapper_(*args, **kwargs):
+    def crawler_wrapper_(*args):
         settings = Settings()
         settings.set('LOG_LEVEL', 'WARNING')
         settings.set('USER_AGENT', 'Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 5.1)')
@@ -28,7 +28,7 @@ def _crawler_wrapper(f):
         settings.set('FEED_EXPORT_ENCODING', 'utf-8')
         settings.set('DOWNLOAD_DELAY', 0.25)
 
-        params = f(*args, **kwargs)
+        params = f(*args)
 
         settings.set('FEED_URI', 'crawl_app/spider/output/{}.jl'.format(params['jobid']))
         settings.set('LOG_FILE', 'crawl_app/spider/output/log/log-{}.txt'.format(params['jobid']))
@@ -55,13 +55,13 @@ def _crawler_wrapper(f):
             msg = 'command okbot_crawl, fail to fetch job log. id: {}. create a new one'.format(params['jobid'])
             logger.error(e)
             logger.error(msg)            
-            try:                
-                job = Joblog(name=params['jobid'], start_time=now)
+            # try:                
+            job = Joblog(name=params['jobid'], start_time=now)
                 # job.result = '\n'.join([e, msg])
-            except Exception as e:
-                logger.error(e)
-                logger.error('command okbot_crawl, fail to create job log')
-                return
+            # except Exception as e:
+                # logger.error(e)
+                # logger.error('command okbot_crawl, fail to create job log')
+                # return
         job.status = 'finished'
         job.save()
 
@@ -91,28 +91,27 @@ class Command(BaseCommand):
 
         now = timezone.now()
         jobid = '{}.{}.{}.{}'.format(tag.lower(), spider.start, spider.end, now.strftime('%Y-%m-%d-%H-%M-%S'))
-        try:
-            Joblog(name=jobid, start_time=now, status='running').save()
-        except Exception as e:
-            logger.error(e)
-            logger.error('command okbot_crawl, fail to create job log')
+        # try:
+        Joblog(name=jobid, start_time=now, status='running').save()
+        # except Exception as e:
+        #     logger.error(e)
+        #     logger.error('command okbot_crawl, fail to create job log')
         self._crawl(spider, jobid)
 
-        try:
-            job = Joblog.objects.get(name=jobid)
-            if job.status != 'finished':
-                job.status = 'terminated'
-                job.save()
-        except Exception as e:
-            logger.error(e)
-            logger.error('command okbot_crawl, fail to final check job log. id: {}.'.format(jobid))
+        # try:
+        #     job = Joblog.objects.get(name=jobid)
+        #     if job.status != 'finished':
+        #         job.status = 'terminated'
+        #         job.save()
+        # except Exception as e:
+        #     logger.error(e)
+        #     logger.error('command okbot_crawl, fail to final check job log. id: {}.'.format(jobid))
 
 
     @_crawler_wrapper
-    def _crawl(self, spider, jobid, **kwargs):
+    def _crawl(self, spider, jobid):
         blacklist = {}
 
-        btype = ['title', 'push', 'author']
         btype = [t[1] for t in Blacklist.BLIST_TYPE_CHOICES[1:]]
         blist = spider.blacklist.all()
         for b in blist:
@@ -131,7 +130,7 @@ class Command(BaseCommand):
         if end_idx >= newest_idx:
             end_idx = 1 + int(newest_idx * 0.9)
 
-        if start_idx >= end_idx:
+        if start_idx > end_idx:
             end_idx = start_idx
         return {
             'jobid': jobid,

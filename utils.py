@@ -1,4 +1,5 @@
 import psycopg2
+import jieba.posseg as pseg
 import time
 import os
 
@@ -40,6 +41,14 @@ class PsqlQuery(PsqlAbstract):
         super(self.__class__, self).__init__(username=username, db=db, password=password)
         self.schema = {}
 
+    def upsert(self, q, data=None):
+        self._upsert(query_=q, data=data)
+
+    @PsqlAbstract.session()
+    def _upsert(self, connect, cursor, query_=None, data=None):
+        cursor.execute(query_, data)
+        connect.commit()
+
     def query(self, q, data=None, skip=False):
         if not skip:
             self._get_schema(query_=q, data=data)
@@ -67,4 +76,28 @@ class PsqlQuery(PsqlAbstract):
             yield record
         PsqlAbstract._close(connect, cursor)
 
+
+
+class TokenizerNotExistException(Exception):
+    pass
+
+class Tokenizer(object):
+
+    _tokenizer = ('jieba',)
+
+    def __init__(self, tok_tag):
+        if tok_tag not in self._tokenizer:
+            raise TokenizerNotExistException
+        self.tok_tag = tok_tag
+
+    def cut(self, sentence):
+        if self.tok_tag == 'jieba':
+            pairs = pseg.cut(sentence)
+            words, flags = [], []
+            for p in pairs:
+                w = p.word.strip()
+                if len(w) > 0:
+                    words.append(w)
+                    flags.append(p.flag)
+            return words, flags
 
