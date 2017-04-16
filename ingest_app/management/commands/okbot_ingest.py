@@ -88,24 +88,14 @@ class Command(BaseCommand):
         ingester = Ingester(spider_tag, tok_tag)
 
         for batch_post in jlparser.batch_parse():
-            ingester.upsert_post(batch_post)
-            ingester.upsert_vocab_ignore_docfreq(batch_post)
+            post_url = ingester.upsert_post(batch_post)
+            vocab_name = ingester.upsert_vocab_ignore_docfreq(batch_post)
+            ingester.upsert_vocab2post(batch_post, vocab_name, post_url)
             break
-#            self._upsert_post(batch_post)
-#            title_tok = [p['title_tok'] for p in batch_post]
             
-#            vocabs = [item for sublist in title_tok for item in sublist]
-#            tok_name = list({'--+--'.join([v.word, v.flag, self.tok_tag]) for v in vocabs})
-#            self._upsert_vocab_ignore_df(batch_post, tok_name)
 #            self._upsert_vocab2post(batch_post, tok_name)
 
-#            post_sent_tag = [p['title_grammar'] for p in batch_post]
-#            sent_tag = list({s for s in post_sent_tag})
-#            self._upsert_grammar_ignore_df(batch_post, sent_tag)
-#            self._upsert_grammar2post(batch_post, sent_tag)
 
-        # self.cur.close()
-        # self.conn.close()
         logger.info('okbot ingest job finished. elapsed time: {} sec.'.format(time.time() - time_tic))
 
 
@@ -129,25 +119,29 @@ class Command(BaseCommand):
 
 class Ingester(object):
     query_post_sql = '''
-        SELECT * FROM ingest_app_post WHERE url IN %s;
+            SELECT * FROM ingest_app_post WHERE url IN %s;
     '''
 
     upsert_post_sql = '''
-        INSERT INTO ingest_app_post(title, tokenized, grammar, tag, spider, url, 
-                                    author, push, publish_date, last_update, update_count, allow_update)
-        SELECT unnest( %(title)s ), unnest( %(tokenized)s ), unnest( %(grammar)s ), 
-               unnest( %(tag)s ), unnest( %(spider)s ), unnest( %(url)s ), unnest( %(author)s ), 
-               unnest( %(push)s ), unnest( %(publish_date)s ), unnest( %(last_update)s ), 
-               unnest( %(update_count)s ), unnest( %(allow_update)s )
-        ON CONFLICT (url) DO 
-        UPDATE SET 
-            tokenized = EXCLUDED.tokenized,
-            grammar = EXCLUDED.grammar,
-            push = EXCLUDED.push,
-            last_update = EXCLUDED.last_update,
-            allow_update = EXCLUDED.allow_update,
-            update_count = ingest_app_post.update_count + 1 
-        WHERE ingest_app_post.allow_update = True;
+            INSERT INTO ingest_app_post(title, tokenized, grammar, tag, spider, url, 
+                                        author, push, publish_date, last_update, update_count, allow_update)
+            SELECT unnest( %(title)s ), unnest( %(tokenized)s ), unnest( %(grammar)s ), 
+                   unnest( %(tag)s ), unnest( %(spider)s ), unnest( %(url)s ), unnest( %(author)s ), 
+                   unnest( %(push)s ), unnest( %(publish_date)s ), unnest( %(last_update)s ), 
+                   unnest( %(update_count)s ), unnest( %(allow_update)s )
+            ON CONFLICT (url) DO 
+            UPDATE SET 
+                tokenized = EXCLUDED.tokenized,
+                grammar = EXCLUDED.grammar,
+                push = EXCLUDED.push,
+                last_update = EXCLUDED.last_update,
+                allow_update = EXCLUDED.allow_update,
+                update_count = ingest_app_post.update_count + 1 
+            WHERE ingest_app_post.allow_update = True;
+    '''
+
+    query_vocab_sql = '''
+            SELECT * FROM ingest_app_vocabulary WHERE name IN %s;
     '''
 
     upsert_vocab_sql = '''
@@ -156,14 +150,33 @@ class Ingester(object):
             ON CONFLICT (name) DO NOTHING         
     '''
 
+    upsert_vocab2post_sql = '''
+            INSERT INTO ingest_app_vocabulary_post (vocabulary_id, post_id)
+            SELECT unnest( %(vocabulary_id)s ), unnest( %(post_id)s )
+            ON CONFLICT DO NOTHING
+    '''
+
     def __init__(self, spider_tag, tok_tag):
         self.spider_tag = spider_tag
         self.tok_tag = tok_tag
 
-    def query_post(self, url):
+    def _query_all(self, sql_string, data=None):
         psql = PsqlQuery()
-        qpost = list(psql.query(self.query_post_sql, (tuple(url),)))
+        fetched = list(psql.query(sql_string, data))
         schema = psql.schema
+        return fetched, schema
+
+
+    def query_vocab(self, name):
+        qvocab, schema = self._query_all(self.query_vocab_sql, (tuple(name),))
+        return qvocab, schema
+
+
+    def query_post(self, url):
+        qpost, schema = self._query_all(self.query_post_sql, (tuple(url),))
+        # psql = PsqlQuery()
+        # qpost = list(psql.query(self.query_post_sql, (tuple(url),)))
+        # schema = psql.schema
         return qpost, schema
 
     def upsert_vocab_ignore_docfreq(self, batch_post):
@@ -179,6 +192,35 @@ class Ingester(object):
 
         psql = PsqlQuery()
         psql.upsert(self.upsert_vocab_sql, locals())
+
+        return name
+
+    def upsert_vocab2post(self, batch_post, vocab_name, post_url):
+        qvocab, vschema = self.query_vocab(vocab_name)
+        qpost, pschema = self.query_post(post_url)
+
+        print(vschema)
+        print(qvocab)
+        print('----------------')
+        print(pschema)
+        print(qpost)
+        print('----------------')
+
+        post_tok_name = [['--+--'.join([k.word, k.flag, self.tok_tag]) for k in p['title_tok']] for p in batch_post]
+
+        vocab2post = []
+        for vocab in qvocab:
+            post_id_with_vocab = [p[pschema['id']] for idx, p in enumerate(qpost) if vocab[vschema['name']] in title_tok_name[idx]]
+            vocab2post.append([(vocab[vschema['id']], pid) for pid in post_id_with_vocab])
+
+        print(vocab2post)
+        flatten_vocab2post = [tup for v2p in vocab2post for tup in v2p]
+
+        vocabulary_id = [v2p[0] for v2p in flatten_vocab2post]
+        post_id = [v2p[1] for v2p in flatten_vocab2post]
+
+        psql = PsqlQuery()
+        psql.upsert(self.upsert_vocab2post_sql, {'vocabulary_id': vocabulary_id, 'post_id': post_id})
 
 
     def upsert_post(self, batch_post):
@@ -205,6 +247,8 @@ class Ingester(object):
 
         psql = PsqlQuery()
         psql.upsert(self.upsert_post_sql, locals())
+
+        return url
         
 
         
