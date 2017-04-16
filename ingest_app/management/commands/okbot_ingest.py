@@ -28,45 +28,6 @@ class Command(BaseCommand):
            ex: python manage.py okbot_ingest --jlpath <jsonline-file> --tokenizer <tokenizer>
            '''
 
-    # idx_post = {
-    #     'pk': 0,
-    #     'title': 1,
-    #     'tag': 2,
-    #     'spider': 3,
-    #     'url': 4,
-    #     'author': 5,
-    #     'push': 6,
-    #     'publish_date': 7,
-    #     'last_update': 8,
-    #     'update_count': 9,
-    #     'allow_update': 10
-    # }
-
-    # idx_vocab = {
-    #     'pk': 0,
-    #     'name': 1,
-    #     'word': 2,
-    #     'tokenizer': 3,
-    #     'tag': 4,
-    #     'doc_freq': 5,
-    #     'excluded': 6
-    # }
-
-    # idx_vocab2post = {
-    #     'pk': 0,
-    #     'vocabulary_pk': 1,
-    #     'post_pk': 2,
-    # }
-
-    # idx_grammar = {
-    #     'pk': 0,
-    #     'name': 1,
-    #     'sent_tag': 2,
-    #     'tokenizer': 3,
-    #     'doc_freq': 4
-    # }
-
-
     def add_arguments(self, parser):
         parser.add_argument('--jlpath', nargs=1, type=str)
         parser.add_argument('--tokenizer', nargs=1, type=str)
@@ -87,14 +48,14 @@ class Command(BaseCommand):
         jlparser = CrawledJLParser(jlpath, tokenizer)
         ingester = Ingester(spider_tag, tok_tag)
 
+        consumed_num = 0
         for batch_post in jlparser.batch_parse():
             post_url = ingester.upsert_post(batch_post)
             vocab_name = ingester.upsert_vocab_ignore_docfreq(batch_post)
             ingester.upsert_vocab2post(batch_post, vocab_name, post_url)
-            break
-            
-#            self._upsert_vocab2post(batch_post, tok_name)
-
+            consumed_num += len(batch_post)
+            logger.info('okbot ingest: {} data consumed from {}.'.format(consumed_num, file_name))
+ 
 
         logger.info('okbot ingest job finished. elapsed time: {} sec.'.format(time.time() - time_tic))
 
@@ -229,8 +190,7 @@ class Ingester(object):
 
     def _update_vocab_docfreq(self, vocab_id):
         qvocab2post, schema = self._query_all(self.query_vocab2post, (tuple(vocab_id),))
-
-        qvocab_id = [v2p[schema['id']] for v2p in qvocab2post]
+        qvocab_id = [v2p[schema['vocabulary_id']] for v2p in qvocab2post]
 
         vocab_cnt = collections.Counter(qvocab_id)
         id_ = list(vocab_cnt.keys())
@@ -262,9 +222,12 @@ class Ingester(object):
         #     if q:
         #         if len(q[schema['push']]) == len(push[i]):
         #             allow_update[i] = False
-
-        psql = PsqlQuery()
-        psql.upsert(self.upsert_post_sql, locals())
+        try:
+            psql = PsqlQuery()
+            psql.upsert(self.upsert_post_sql, locals())
+        except Exception as e:
+            print(post_num)
+            raise e
 
         return url
         
@@ -282,14 +245,14 @@ class CrawledJLParser(object):
     def batch_parse(self, batch_size=1000):
         with open(self.jlpath, 'r') as f:
             i = 0
-            parsed = [None] * batch_size
+            parsed = []
             for line in f:
-                parsed[i] = self._parse(line)
+                parsed.append(self._parse(line))
                 i += 1
                 if i >= batch_size:
                     i = 0
-                    parsed = [None] * batch_size
                     yield [ps for ps in parsed if ps]
+                    parsed = []
 
             yield [ps for ps in parsed[:i] if ps]
 
