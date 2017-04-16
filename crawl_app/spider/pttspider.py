@@ -48,7 +48,7 @@ class PttSpider(scrapy.Spider):
     audience_xpath = '//div[@class="push"]/span[@class="f3 hl push-userid"]'
     push_xpath = '//div[@class="push"]/span[@class="f3 push-content"]'
     content_xpath = '//div[@id="main-content"]'
-    content_end = r'\n-+\n'
+    content_end = r'\n?-+\n'
 
     def __init__(self, tag, entry, *args, **kwargs):
         super(PttSpider, self).__init__(*args, **kwargs)

@@ -156,6 +156,16 @@ class Ingester(object):
             ON CONFLICT DO NOTHING
     '''
 
+    query_vocab2post = '''
+            SELECT vocabulary_id FROM ingest_app_vocabulary_post WHERE vocabulary_id IN %s;
+    '''
+
+    update_vocab_docfreq_sql = '''
+            UPDATE ingest_app_vocabulary AS old SET doc_freq = new.doc_freq 
+            FROM (SELECT unnest( %(id_)s ) as id, unnest( %(freq)s ) as doc_freq) as new  
+            WHERE old.id = new.id;
+    '''
+
     def __init__(self, spider_tag, tok_tag):
         self.spider_tag = spider_tag
         self.tok_tag = tok_tag
@@ -213,6 +223,22 @@ class Ingester(object):
 
         psql = PsqlQuery()
         psql.upsert(self.upsert_vocab2post_sql, {'vocabulary_id': vocabulary_id, 'post_id': post_id})
+
+        self._update_vocab_docfreq(vocabulary_id)
+
+
+    def _update_vocab_docfreq(self, vocab_id):
+        qvocab2post, schema = self._query_all(self.query_vocab2post, (tuple(vocab_id),))
+
+        qvocab_id = [v2p[schema['id']] for v2p in qvocab2post]
+
+        vocab_cnt = collections.Counter(qvocab_id)
+        id_ = list(vocab_cnt.keys())
+        freq = list(vocab_cnt.values())
+
+        psql = PsqlQuery()
+        psql.upsert(self.update_vocab_docfreq_sql, {'id_':id_, 'freq': freq})
+
 
 
     def upsert_post(self, batch_post):
