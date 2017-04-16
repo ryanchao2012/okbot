@@ -7,7 +7,7 @@ from .models import Vocabulary, Post, Joblog#, Grammar
 
 
 class PostAdmin(admin.ModelAdmin):
-    list_display = ('title', 'tag', 'spider', 'last_update', 'update_count', 'allow_update')
+    list_display = ('title', 'tokenized', 'spider', 'last_update', 'allow_update')
     list_editable = ('allow_update',)
     search_fields = ('title',)
 

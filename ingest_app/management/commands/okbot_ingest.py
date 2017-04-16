@@ -174,10 +174,11 @@ class Ingester(object):
 
     def query_post(self, url):
         qpost, schema = self._query_all(self.query_post_sql, (tuple(url),))
-        # psql = PsqlQuery()
-        # qpost = list(psql.query(self.query_post_sql, (tuple(url),)))
-        # schema = psql.schema
-        return qpost, schema
+        aligned_post = [None] * len(url)
+        for p in qpost:
+            idx = url.index(p[schema['url']])
+            aligned_post[idx] = p
+        return aligned_post, schema
 
     def upsert_vocab_ignore_docfreq(self, batch_post):
         allpairs = [pair for post in batch_post for pair in post['title_tok']]
@@ -198,22 +199,13 @@ class Ingester(object):
     def upsert_vocab2post(self, batch_post, vocab_name, post_url):
         qvocab, vschema = self.query_vocab(vocab_name)
         qpost, pschema = self.query_post(post_url)
-
-        print(vschema)
-        print(qvocab)
-        print('----------------')
-        print(pschema)
-        print(qpost)
-        print('----------------')
-
-        post_tok_name = [['--+--'.join([k.word, k.flag, self.tok_tag]) for k in p['title_tok']] for p in batch_post]
+        title_tok_name = [['--+--'.join([k.word, k.flag, self.tok_tag]) for k in p['title_tok']] for p in batch_post]
 
         vocab2post = []
         for vocab in qvocab:
             post_id_with_vocab = [p[pschema['id']] for idx, p in enumerate(qpost) if vocab[vschema['name']] in title_tok_name[idx]]
             vocab2post.append([(vocab[vschema['id']], pid) for pid in post_id_with_vocab])
 
-        print(vocab2post)
         flatten_vocab2post = [tup for v2p in vocab2post for tup in v2p]
 
         vocabulary_id = [v2p[0] for v2p in flatten_vocab2post]
