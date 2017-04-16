@@ -31,8 +31,8 @@ class Post(models.Model):
 
 
 class Vocabulary(models.Model):
-    name = models.CharField(max_length=63, unique=True)
-    word = models.CharField(max_length=31)
+    name = models.CharField(max_length=255, unique=True)
+    word = models.CharField(max_length=255)
     tokenizer = models.CharField(max_length=31)
     tag = models.CharField(max_length=31, blank=True, null=True)
     post = models.ManyToManyField(Post, blank=True)

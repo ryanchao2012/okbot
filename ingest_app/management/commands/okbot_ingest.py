@@ -161,7 +161,6 @@ class Ingester(object):
         tokenizer = [g[2] for g in groups]
         doc_freq = [-1 for g in groups]
         stopword = [False for g in groups]
-
         psql = PsqlQuery()
         psql.upsert(self.upsert_vocab_sql, locals())
 
