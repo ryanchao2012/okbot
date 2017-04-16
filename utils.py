@@ -1,5 +1,6 @@
 import psycopg2
 import jieba.posseg as pseg
+import math
 import time
 import os
 
@@ -102,4 +103,34 @@ class Tokenizer(object):
                     words.append(w)
                     flags.append(p.flag)
             return tok, words, flags
+
+
+
+# summation(tf * (k1 + 1) /(tf + k1*(1 - b + b*len(doc)/AVE_DOC_LEN)))
+# k1 = [1.2, 2.0]
+def bm25_similarity(vocab, doc, k1=1.5, b=0.75):
+    DOC_NUM = 300000.0
+    AVE_TITLE_LEN = 19.0
+    title_len = len(doc)
+    def _bm25(v):
+        if v['word'] in doc:
+            idf = math.log(DOC_NUM / min(1.0, v['docfreq']))
+            tf = v['termweight']
+            return idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b*title_len/AVE_TITLE_LEN))
+        else:
+            return 0.0
+    
+    score = [_bm25(v) for v in vocab]
+
+    return sum(score)
+        
+
+
+
+
+def jaccard_similarity(wlist1, wlist2):
+    wset1 = set(wlist1)
+    wset2 = set(wlist2)
+    union = set(wlist1 + wlist2)
+    return len(wset1.intersection(wset2)) / len(union)
 

@@ -11,8 +11,10 @@ import os
 import time
 import random 
 import jieba.posseg as pseg
-import psycopg2
+# import psycopg2
 import logging
+from utils import (PsqlQuery, Tokenizer, 
+        bm25_similarity, jaccard_similarity)
 
 
 logger = logging.getLogger('okbot_chat_view')
@@ -156,11 +158,54 @@ def send_typing_bubble(sender_id, onoff=False):
 
 
 def _chat_query(text):
-    return '滾喇'
-    # try:
-    #     pairs = {e for e in list(pseg.cut(text)) if len(e.word.strip()) > 0}
+    # return '滾喇'
+    try:
+        # pairs = list({e for e in list(pseg.cut(text)) if len(e.word.strip()) > 0})
+        tok, words, flags = Tokenizer('jieba').cut(text)
+        vocab_name = ['--+--'.join([t.word, t.flag, 'jieba']) for t in tok]
+        psql = PsqlQuery()
+        query_vocab = list(psql.query( '''
+                                                SELECT id, word, tag, doc_freq FROM ingest_app_vocabulary 
+                                                WHERE name IN %s AND stopword=False;
+                                            ''', (tuple(vocab_name),)
+                                    )
+        )
+        vschema = psql.schema
+        query_vid = [q[vschema['id']] for q in query_vocab]
+
+        vocab = [{'word': ':'.join([q[vschema['word']], q[vschema['tag']]]),'termweight': 1.0, 'docfreq': q[vschema['doc_freq']]} for q in query_vocab]
+        print(vocab)
+
+        query_pid = list(PsqlQuery().query( '''
+                                                SELECT post_id FROM ingest_app_vocabulary_post 
+                                                WHERE vocabulary_id IN %s;
+                                            ''', (tuple(query_vid),)
+                                    )
+        )
+        psql = PsqlQuery()
+        allpost = psql.query('''
+                            SELECT tokenized, grammar, push FROM ingest_app_post WHERE id IN %s;
+                          ''', (tuple(query_pid),)
+        )
+        pschema = psql.schema
+
+        top_post = None
+        top_score = -9999.0
+        
+        for post in allpost:
+            doc = [':'.join([t, g]) for t, g in zip(post[pschema['tokenized']], post[pschema['grammar']])]
+            score = bm25_similarity(vocab, doc)
+            if score > top_score:
+                top_score = score
+                top_post = post
+
+        push = [p[p.find(':')+1 :].strip() for p in top_post[pschema['push']].split('\n')]
+        select_push = push[random.randint(0, len(push)-1)]
+        return select_push
+
+
+
     #     wlist1 = list({v.word for v in pairs})
-    #     vocab_name = list({'--+--'.join([v.word, v.flag, 'jieba']) for v in pairs})
 
     #     CURSOR.execute("SELECT id FROM ingest_app_vocabulary WHERE name IN %s AND excluded = False;", (tuple(vocab_name),))
     #     vocab_id = [v[0] for v in CURSOR.fetchall()]
@@ -181,17 +226,18 @@ def _chat_query(text):
     #     select_push = push[random.randint(0, len(push)-1)]
     #     return select_push
 
-    # except Exception as e:
-    #     CONNECT.rollback()
-    #     logger.error(e)
-    #     return 'Q_Q'
+    except Exception as e:
+        logger.error(e)
+        default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
+
+        return default_reply[random.randint(0, len(default_reply)-1)]
 
 
 
-def _jaccard(wlist1, wlist2):
-    wset1 = set(wlist1)
-    wset2 = set(wlist2)
-    return len(wset1.intersection(wset2)) / len(set(wlist1 + wlist2))
+# def _jaccard(wlist1, wlist2):
+#     wset1 = set(wlist1)
+#     wset2 = set(wlist2)
+#     return len(wset1.intersection(wset2)) / len(set(wlist1 + wlist2))
 
 
 
