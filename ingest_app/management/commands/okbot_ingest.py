@@ -85,20 +85,23 @@ class Command(BaseCommand):
         Joblog(name=jobid, start_time=now, status='running').save()
 
         jlparser = CrawledJLParser(jlpath, tokenizer)
+        ingester = Ingester(spider_tag)
 
         for batch_post in jlparser.batch_parse():
-            self._upsert_post(batch_post)
-            title_tok = [p['title_tok'] for p in batch_post]
+            ingester.upsert_post(batch_post)
+            break
+#            self._upsert_post(batch_post)
+#            title_tok = [p['title_tok'] for p in batch_post]
             
-            vocabs = [item for sublist in title_tok for item in sublist]
-            tok_name = list({'--+--'.join([v.word, v.flag, self.tok_tag]) for v in vocabs})
-            self._upsert_vocab_ignore_df(batch_post, tok_name)
-            self._upsert_vocab2post(batch_post, tok_name)
-            
-            post_sent_tag = [p['title_grammar'] for p in batch_post]
-            sent_tag = list({s for s in post_sent_tag})
-            self._upsert_grammar_ignore_df(batch_post, sent_tag)
-            self._upsert_grammar2post(batch_post, sent_tag)
+#            vocabs = [item for sublist in title_tok for item in sublist]
+#            tok_name = list({'--+--'.join([v.word, v.flag, self.tok_tag]) for v in vocabs})
+#            self._upsert_vocab_ignore_df(batch_post, tok_name)
+#            self._upsert_vocab2post(batch_post, tok_name)
+
+#            post_sent_tag = [p['title_grammar'] for p in batch_post]
+#            sent_tag = list({s for s in post_sent_tag})
+#            self._upsert_grammar_ignore_df(batch_post, sent_tag)
+#            self._upsert_grammar2post(batch_post, sent_tag)
 
         # self.cur.close()
         # self.conn.close()
@@ -141,7 +144,7 @@ class Ingester(object):
             push = EXCLUDED.push,
             last_update = EXCLUDED.last_update,
             allow_update = EXCLUDED.allow_update,
-            update_count = ingest_app_post.update_count + 1, 
+            update_count = ingest_app_post.update_count + 1 
         WHERE ingest_app_post.allow_update = True;
     '''
 
