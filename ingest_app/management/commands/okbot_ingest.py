@@ -85,10 +85,11 @@ class Command(BaseCommand):
         Joblog(name=jobid, start_time=now, status='running').save()
 
         jlparser = CrawledJLParser(jlpath, tokenizer)
-        ingester = Ingester(spider_tag)
+        ingester = Ingester(spider_tag, tok_tag)
 
         for batch_post in jlparser.batch_parse():
             ingester.upsert_post(batch_post)
+            ingester.upsert_vocab_ignore_docfreq(batch_post)
             break
 #            self._upsert_post(batch_post)
 #            title_tok = [p['title_tok'] for p in batch_post]
@@ -130,6 +131,7 @@ class Ingester(object):
     query_post_sql = '''
         SELECT * FROM ingest_app_post WHERE url IN %s;
     '''
+
     upsert_post_sql = '''
         INSERT INTO ingest_app_post(title, tokenized, grammar, tag, spider, url, 
                                     author, push, publish_date, last_update, update_count, allow_update)
@@ -148,8 +150,15 @@ class Ingester(object):
         WHERE ingest_app_post.allow_update = True;
     '''
 
-    def __init__(self, tag):
-        self.spider_tag = tag
+    upsert_vocab_sql = '''
+            INSERT INTO ingest_app_vocabulary(name, word, tokenizer, tag, doc_freq, stopword) 
+            SELECT unnest( %(name)s ), unnest( %(word)s ), unnest( %(tokenizer)s ), unnest( %(tag)s ), unnest( %(doc_freq)s ), unnest( %(stopword)s )
+            ON CONFLICT (name) DO NOTHING         
+    '''
+
+    def __init__(self, spider_tag, tok_tag):
+        self.spider_tag = spider_tag
+        self.tok_tag = tok_tag
 
     def query_post(self, url):
         psql = PsqlQuery()
@@ -157,12 +166,26 @@ class Ingester(object):
         schema = psql.schema
         return qpost, schema
 
+    def upsert_vocab_ignore_docfreq(self, batch_post):
+        allpairs = [pair for post in batch_post for pair in post['title_tok']]
+        name = list({'--+--'.join([pair.word, pair.flag, self.tok_tag]) for pair in allpairs})
+        num = len(name)
+        groups = [nm.split('--+--') for nm in name]
+        word = [g[0] for g in groups]
+        tag = [g[1] for g in groups]
+        tokenizer = [g[2] for g in groups]
+        doc_freq = [-1 for g in groups]
+        stopword = [False for g in groups]
+
+        psql = PsqlQuery()
+        psql.upsert(self.upsert_vocab_sql, locals())
+
 
     def upsert_post(self, batch_post):
         post_num = len(batch_post)
         
         title = [p['title'] for p in batch_post]
-        tokenized = [p['title_tok'] for p in batch_post]
+        tokenized = [p['title_vocab'] for p in batch_post]
         grammar = [p['title_grammar'] for p in batch_post]
         url = [p['url'] for p in batch_post]
         tag = [p['tag'] for p in batch_post]
@@ -222,11 +245,12 @@ class CrawledJLParser(object):
                 title = title_[right_quote_idx + 1 :].strip()
                 tag = title_[1 : right_quote_idx].strip()
 
-            title_tok, title_grammar = self.tokenizer.cut(title)
+            title_tok, title_vocab, title_grammar = self.tokenizer.cut(title)
             return {
                 'title': title,
                 'tag': tag,
-                'title_tok': ' '.join(title_tok),
+                'title_tok': title_tok,
+                'title_vocab': ' '.join(title_vocab),
                 'title_grammar': ' '.join(title_grammar),
                 'url': post['url'],
                 'author': post['author'],

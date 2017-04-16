@@ -93,11 +93,13 @@ class Tokenizer(object):
     def cut(self, sentence):
         if self.tok_tag == 'jieba':
             pairs = pseg.cut(sentence)
-            words, flags = [], []
+            tok, words, flags = [], [], []
+
             for p in pairs:
                 w = p.word.strip()
                 if len(w) > 0:
+                    tok.append(p)
                     words.append(w)
                     flags.append(p.flag)
-            return words, flags
+            return tok, words, flags
 
