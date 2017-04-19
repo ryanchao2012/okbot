@@ -111,26 +111,55 @@ class Tokenizer(object):
 def bm25_similarity(vocab, doc, k1=1.5, b=0.75):
     DOC_NUM = 300000.0
     AVE_TITLE_LEN = 19.0
-    title_len = len(doc)
+    doc_len = len(doc)
     def _bm25(v):
         if v['word'] in doc:
             idf = math.log(DOC_NUM / min(1.0, v['docfreq']))
             tf = v['termweight']
-            return idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b*title_len/AVE_TITLE_LEN))
+            return idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b*doc_len/AVE_TITLE_LEN))
         else:
             return 0.0
     
-    score = [_bm25(v) for v in vocab]
+    score = sum([_bm25(v) for v in vocab])
 
-    return sum(score)
+    return score
         
 
+def tfidf_jaccard_similarity(vocab, doc):
+    DOC_NUM = 300000
+    invocab = []
+    for v in vocab:
+        if v['word'] in doc and v not in invocab:
+            invocab.append(v)
+
+    tfidf = [v['termweight'] * math.log(DOC_NUM / min(1.0, v['docfreq'])) for v in invocab]
+    union = set([v['word'] for v in vocab] + doc)
+    score = sum(tfidf) / float(len(union))
+    return score
+
+
+def jaccard_similarity(vocab, doc):
+    wlist = [v['word'] for v in vocab]
+    wset = set(wlist)
+    dset = set(doc)
+    union = set(wlist + doc)
+    score = len(wset.intersection(dset)) / float(len(union))
+    return score
 
 
 
-def jaccard_similarity(wlist1, wlist2):
-    wset1 = set(wlist1)
-    wset2 = set(wlist2)
-    union = set(wlist1 + wlist2)
-    return len(wset1.intersection(wset2)) / len(union)
 
+class Chatter(object):
+    def __init__(self, query, tokenizer='jieba'):
+        self.query = query
+        self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
+        vocab_name = ['--+--'.join([t.word, t.flag, 'jieba']) for t in tok]
+        query_vocab = list(psql.query( '''
+                                                SELECT * FROM ingest_app_vocabulary
+                                                WHERE name IN %s;
+                                            ''', (tuple(vocab_name),)
+                                    )
+        )
+
+        self.vschema = psql.schema
+        self.vocab = [{'word': ':'.join([q[vschema['word']], q[vschema['tag']]]),'termweight': 1.0, 'docfreq': q[vschema['doc_freq']]} for q in query_vocab]

@@ -11,10 +11,10 @@ import os
 import time
 import random 
 import jieba.posseg as pseg
-# import psycopg2
 import logging
 from utils import (PsqlQuery, Tokenizer, 
-        bm25_similarity, jaccard_similarity)
+        bm25_similarity, jaccard_similarity, 
+        tfidf_jaccard_similarity)
 
 
 logger = logging.getLogger('okbot_chat_view')
@@ -28,11 +28,6 @@ logger.addHandler(ch)
 
 line_bot_api = LineBotApi(os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
 line_webhook_parser = WebhookParser(os.environ['LINE_CHANNEL_SECRET'])
-# OKBOT_DB_USER = os.environ['OKBOT_DB_USER']
-# OKBOT_DB_NAME = os.environ['OKBOT_DB_NAME']
-# OKBOT_DB_PASSWORD = os.environ['OKBOT_DB_PASSWORD']
-# CONNECT = psycopg2.connect(database=OKBOT_DB_NAME, user=OKBOT_DB_USER, password=OKBOT_DB_PASSWORD)
-# CURSOR = CONNECT.cursor()
 
 
 OKBOT_PAGE_ACCESS_KEY=os.environ['OKBOT_PAGE_ACCESS_KEY']
@@ -112,25 +107,30 @@ def fb_webhook(request):
             for message_evt in entry['messaging']:
                 sender_id = message_evt.get('sender').get('id')
                 if 'message' in message_evt:
+                    send_seen(sender_id)
                     send_typing_bubble(sender_id, True)
                     msg = message_evt.get('message')
                     if 'text' in msg:
                         text = msg.get('text')
-                        # time.sleep(random.randint(1,5))
                         handle_message(sender_id, text)
-                        # print('*********', _chat_query(text))
     send_typing_bubble(sender_id, False)
     return HttpResponse()
 
 
-
-
+@graph_api_post
+def send_seen(sender_id):
+    data = json.dumps({
+        "sender_action": 'mark_seen',
+        "recipient": {
+            "id": sender_id
+        }
+    })
+    return data, 'send mark seen.'
 
 @graph_api_post
 def handle_message(sender_id, text='哈哈'):
     query = text
     reply = _chat_query(query)
-
     data = json.dumps({
         "recipient": {
             "id": sender_id
@@ -158,22 +158,32 @@ def send_typing_bubble(sender_id, onoff=False):
 
 
 def _chat_query(text):
-    # return '滾喇'
     try:
-        # pairs = list({e for e in list(pseg.cut(text)) if len(e.word.strip()) > 0})
         tok, words, flags = Tokenizer('jieba').cut(text)
         vocab_name = ['--+--'.join([t.word, t.flag, 'jieba']) for t in tok]
         psql = PsqlQuery()
         query_vocab = list(psql.query( '''
-                                                SELECT id, word, tag, doc_freq FROM ingest_app_vocabulary 
-                                                WHERE name IN %s AND stopword=False;
+                                                SELECT * FROM ingest_app_vocabulary 
+                                                WHERE name IN %s;
                                             ''', (tuple(vocab_name),)
                                     )
         )
         vschema = psql.schema
-        query_vid = [q[vschema['id']] for q in query_vocab]
 
-        vocab = [{'word': ':'.join([q[vschema['word']], q[vschema['tag']]]),'termweight': 1.0, 'docfreq': q[vschema['doc_freq']]} for q in query_vocab]
+        tag_weight = {}
+        for q in query_vocab:
+            if q[vschema['tag']][0] == 'n':
+                tag_weight[q] = 2.0
+            elif q[vschema['tag']][0] == 'v':
+                tag_weight[q] = 1.2
+            elif q[vschema['tag']][0] == 'i':
+                tag_weight[q] = 2.5
+            else: tag_weight[q] = 1.0
+
+        vocab = [{'word': ':'.join([q[vschema['word']], q[vschema['tag']]]),'termweight': tag_weight[q], 'docfreq': q[vschema['doc_freq']]} for q in query_vocab]
+        
+
+        query_vid = [q[vschema['id']] for q in query_vocab if not (q[vschema['stopword']]) and q[vschema['doc_freq']] < 10000 ]
         print(vocab)
 
         query_pid = list(PsqlQuery().query( '''
@@ -189,42 +199,29 @@ def _chat_query(text):
         )
         pschema = psql.schema
 
-        top_post = None
-        top_score = -9999.0
-        
+        tfidf_top_post = []
+        tfidf_top_score = -9999.0
+        jaccard_top_post = []
+        jaccard_top_score = -9999.0
+        tolerance = 0
         for post in allpost:
-            doc = [':'.join([t, g]) for t, g in zip(post[pschema['tokenized']], post[pschema['grammar']])]
-            score = bm25_similarity(vocab, doc)
-            if score > top_score:
-                top_score = score
-                top_post = post
+            doc = [':'.join([t, g]) for t, g in zip(post[pschema['tokenized']].split(), post[pschema['grammar']].split())]
+            score = tfidf_jaccard_similarity(vocab, doc)
+            # score = bm25_similarity(vocab, doc)
+            if score + tolerance >= tfidf_top_score:
+                tfidf_top_score = score
+                tfidf_top_post = [post]
+            score = jaccard_similarity(vocab, doc)
+            if score + tolerance >= jaccard_top_score:
+                jaccard_top_score = score
+                jaccard_top_post = [post]
 
-        push = [p[p.find(':')+1 :].strip() for p in top_post[pschema['push']].split('\n')]
+        logger.info('#{:.2f}:Top post(tfidf): {}'.format(tfidf_top_score, [ p[pschema['tokenized']] for p in tfidf_top_post]))
+        logger.info('#{:.2f}:Top post(jaccard): {}'.format(jaccard_top_score, [ p[pschema['tokenized']] for p in jaccard_top_post]))
+        final_post = tfidf_top_post[random.randint(0, len(tfidf_top_post)-1)]
+        push = [p[p.find(':')+1 :].strip() for p in final_post[pschema['push']].split('\n')]
         select_push = push[random.randint(0, len(push)-1)]
         return select_push
-
-
-
-    #     wlist1 = list({v.word for v in pairs})
-
-    #     CURSOR.execute("SELECT id FROM ingest_app_vocabulary WHERE name IN %s AND excluded = False;", (tuple(vocab_name),))
-    #     vocab_id = [v[0] for v in CURSOR.fetchall()]
-
-    #     CURSOR.execute("SELECT post_id FROM ingest_app_vocabulary_post WHERE vocabulary_id IN %s;", (tuple(vocab_id),))
-    #     post_id = [p[0] for p in CURSOR.fetchall()]
-
-    #     CURSOR.execute("SELECT push, tokenized FROM ingest_app_post WHERE id IN %s;", (tuple(post_id),))
-    #     post = [p for p in CURSOR.fetchall()]
-
-    #     pscore = [None] * len(post)
-    #     for i in range(len(post)):
-    #         wlist2 = post[i][1].split()
-    #         pscore[i] = _jaccard(wlist1, wlist2)
-
-    #     top_post = post[pscore.index(max(pscore))]
-    #     push = [p[p.find(':')+1 :].strip() for p in top_post[0].split('\n')]
-    #     select_push = push[random.randint(0, len(push)-1)]
-    #     return select_push
 
     except Exception as e:
         logger.error(e)
@@ -232,12 +229,6 @@ def _chat_query(text):
 
         return default_reply[random.randint(0, len(default_reply)-1)]
 
-
-
-# def _jaccard(wlist1, wlist2):
-#     wset1 = set(wlist1)
-#     wset2 = set(wlist2)
-#     return len(wset1.intersection(wset2)) / len(set(wlist1 + wlist2))
 
 
 
