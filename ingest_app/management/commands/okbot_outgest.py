@@ -46,19 +46,19 @@ class Command(BaseCommand):
         logger.info('okbot outgest job start.')
         now = timezone.now()
 
-        # jobid =  '.'.join(file_name.split('.')[:3] + [now.strftime('%Y-%m-%d-%H-%M-%S')])
-        # Joblog(name=jobid, start_time=now, status='running').save()
 
         outgester = Outgester()
-        outgester.query_oldpost((fromdate.strftime('%Y-%m-%d'),))
-        #consumed_num = 0
-        #for batch_post in jlparser.batch_parse():
-        #    if len(batch_post) > 0:
+        # outgester.query_oldpost((fromdate.strftime('%Y-%m-%d'),))
+        delete_num = 0
+        for batch_post, pschema in outgester.query_oldpost_batch():
+            if len(batch_post) > 0:
+                outgester.clean_oldpost(batch_post, pschema)
+
         #        post_url = ingester.upsert_post(batch_post)
         #        vocab_name = ingester.upsert_vocab_ignore_docfreq(batch_post)
         #        ingester.upsert_vocab2post(batch_post, vocab_name, post_url)
-        #        consumed_num += len(batch_post)
-        #        logger.info('okbot ingest: {} data consumed from {}.'.format(consumed_num, file_name))
+                delete_num += len(batch_post)
+                logger.info('okbot outgest: {} data deleted.'.format(delete_num))
 
         logger.info('okbot outgest job finished. elapsed time: {:.2f} sec.'.format(time.time() - time_tic))
 
@@ -69,13 +69,33 @@ class Outgester(object):
             DELETE FROM ingest_app_vocabulary_post WHERE id in %s;
     '''
 
+    delete_post_sql = '''
+            DELETE FROM ingest_app_post WHERE id in %s;
+    '''
+
     query_post_sql = '''
             SELECT id, title, publish_date, url 
             FROM ingest_app_post WHERE publish_date < TIMESTAMP %s;
     '''
 
-    def __init__(self):
-        pass
+    query_vocab2post_sql_by_post = '''
+            SELECT * FROM ingest_app_vocabulary_post WHERE post_id IN %s;
+    '''
+
+    query_vocab2post_sql_by_vocab = '''
+            SELECT * FROM ingest_app_vocabulary_post WHERE vocabulary_id IN %s;
+    '''
+
+    update_vocab_docfreq_sql = '''
+            UPDATE ingest_app_vocabulary AS old SET doc_freq = new.doc_freq 
+            FROM (SELECT unnest( %(id_)s ) as id, unnest( %(freq)s ) as doc_freq) as new  
+            WHERE old.id = new.id;
+    '''
+
+
+    def __init__(self, fromdate):
+        self.fromdate = fromdate
+
 
     def _query_all(self, sql_string, data=None):
         psql = PsqlQuery()
@@ -83,13 +103,52 @@ class Outgester(object):
         schema = psql.schema
         return fetched, schema
 
-    def query_oldpost(self, fromdate):
-        oldpost, schema = self._query_all(self.query_post_sql, fromdate)
-        print(len(oldpost))
-        print(schema)
-        _ = [print(p[schema['title']], p[schema['url']]) for p in oldpost]
-        
-        return oldpost, schema
+    def clean_oldpost(self, batch_post, pschema):
+        post_id = [p[pschema['id']] for p in batch_post]
+
+        vocab2post, v2pschema = self._query_all(
+            self.query_vocab2post_sql_by_post, (tuple(post_id),)
+        )
+
+        v2p_id = [v2p[v2pschema['id']] for v2p in vocab2post]
+        vocab_id = list({v2p[v2pschema['vocabulary_id']] for v2p in vocab2post})
+
+        psql = PsqlQuery()
+        psql.delete(self.delete_vocab2post_sql, (tuple(v2p_id),))
+        psql.delete(self.delete_post_sql, (tuple(post_id),))
+
+        self._update_vocab_docfreq(vocab_id)
+
+
+
+    def _update_vocab_docfreq(self, vocab_id):
+        qvocab2post, schema = self._query_all(self.query_vocab2post_sql_by_vocab, (tuple(vocab_id),))
+        qvocab_id = [v2p[schema['vocabulary_id']] for v2p in qvocab2post]
+
+        vocab_cnt = collections.Counter(qvocab_id)
+        id_ = list(vocab_cnt.keys())
+        freq = list(vocab_cnt.values())
+
+        psql = PsqlQuery()
+        psql.upsert(self.update_vocab_docfreq_sql, {'id_':id_, 'freq': freq})
+
+
+
+    def query_oldpost_batch(self, batch_size=1000):
+        psql = PsqlQuery()
+        fetched = psql.query(self.query_post_sql, self.fromdate)
+        schema = psql.schema
+
+        batch, i = [], 0
+        for qpost in fetched:
+            batch.append(qpost)
+            i += 1
+            if i >= batch_size:
+                i = 0
+                yield batch, schema
+                batch = []
+
+        yield batch, schema
 
 
 

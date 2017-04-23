@@ -58,6 +58,15 @@ class PsqlQuery(PsqlAbstract):
         cursor.execute(query_, data)
         connect.commit()
 
+    def delete(self, q, data=None):
+        self._delete(query_=q, data=data)
+
+    @PsqlAbstract.session()
+    def _delete(self, connect, cursor, query_=None, data=None):
+        cursor.execute(query_, data)
+        connect.commit()
+
+
     def query(self, q, data=None, skip=False):
         if not skip:
             self._get_schema(query_=q, data=data)
