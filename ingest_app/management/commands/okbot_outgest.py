@@ -38,8 +38,7 @@ class Command(BaseCommand):
         except Exception as e:
             date_ = '2005-01-01'
             logger.warning(e)
-            logger.warning('Fail to parse date, the correct format is: <year>-<month><date>.')
-            logger.warning('Replace the date to {}.'.format(date_))
+            logger.warning('Fail to parse date, the correct format is: <year>-<month>-<date>. Replace the date to {}.'.format(date_))
             fromdate = timezone.datetime.strptime(date_, '%Y-%m-%d')
 
         
@@ -50,18 +49,18 @@ class Command(BaseCommand):
         # jobid =  '.'.join(file_name.split('.')[:3] + [now.strftime('%Y-%m-%d-%H-%M-%S')])
         # Joblog(name=jobid, start_time=now, status='running').save()
 
-        outgester = Outgester(fromdate)
+        outgester = Outgester()
+        outgester.query_oldpost((fromdate.strftime('%Y-%m-%d'),))
+        #consumed_num = 0
+        #for batch_post in jlparser.batch_parse():
+        #    if len(batch_post) > 0:
+        #        post_url = ingester.upsert_post(batch_post)
+        #        vocab_name = ingester.upsert_vocab_ignore_docfreq(batch_post)
+        #        ingester.upsert_vocab2post(batch_post, vocab_name, post_url)
+        #        consumed_num += len(batch_post)
+        #        logger.info('okbot ingest: {} data consumed from {}.'.format(consumed_num, file_name))
 
-        consumed_num = 0
-        for batch_post in jlparser.batch_parse():
-            if len(batch_post) > 0:
-                post_url = ingester.upsert_post(batch_post)
-                vocab_name = ingester.upsert_vocab_ignore_docfreq(batch_post)
-                ingester.upsert_vocab2post(batch_post, vocab_name, post_url)
-                consumed_num += len(batch_post)
-                logger.info('okbot ingest: {} data consumed from {}.'.format(consumed_num, file_name))
-
-        logger.info('okbot outgest job finished. elapsed time: {} sec.'.format(time.time() - time_tic))
+        logger.info('okbot outgest job finished. elapsed time: {:.2f} sec.'.format(time.time() - time_tic))
 
 
 
@@ -75,7 +74,7 @@ class Outgester(object):
             FROM ingest_app_post WHERE publish_date < TIMESTAMP %s;
     '''
 
-    def __init__(self, fromdate):
+    def __init__(self):
         pass
 
     def _query_all(self, sql_string, data=None):
@@ -87,6 +86,8 @@ class Outgester(object):
     def query_oldpost(self, fromdate):
         oldpost, schema = self._query_all(self.query_post_sql, fromdate)
         print(len(oldpost))
+        print(schema)
+        _ = [print(p[schema['title']], p[schema['url']]) for p in oldpost]
         
         return oldpost, schema
 
