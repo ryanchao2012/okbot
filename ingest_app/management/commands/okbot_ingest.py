@@ -55,7 +55,7 @@ class Command(BaseCommand):
                 vocab_name = ingester.upsert_vocab_ignore_docfreq(batch_post)
                 ingester.upsert_vocab2post(batch_post, vocab_name, post_url)
                 consumed_num += len(batch_post)
-                logger.info('okbot ingest: {} data consumed from {}.'.format(consumed_num, file_name))
+            logger.info('okbot ingest: {} data consumed from {}.'.format(consumed_num, file_name))
 
         logger.info('okbot ingest job finished. elapsed time: {} sec.'.format(time.time() - time_tic))
 

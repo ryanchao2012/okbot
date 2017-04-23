@@ -5,8 +5,8 @@ from .models import Spider, Blacklist, Joblog
 
 
 class SpiderAdmin(admin.ModelAdmin):
-    list_display = ('tag', 'newest', 'start', 'end', 'status')
-    list_editable = ('start', 'end')
+    list_display = ('tag', 'offset', 'page', 'newest', 'start', 'end', 'status')
+    # list_editable = ('start', 'end')
     readonly_fields = ('newest', 'status')
 
 
@@ -29,3 +29,4 @@ class JoblogAdmin(admin.ModelAdmin):
 admin.site.register(Spider, SpiderAdmin)
 admin.site.register(Blacklist, BlacklistAdmin)
 admin.site.register(Joblog, JoblogAdmin)
+

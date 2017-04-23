@@ -47,18 +47,14 @@ class Command(BaseCommand):
         now = timezone.now()
 
 
-        outgester = Outgester()
-        # outgester.query_oldpost((fromdate.strftime('%Y-%m-%d'),))
+        outgester = Outgester(fromdate.strftime('%Y-%m-%d'))
         delete_num = 0
         for batch_post, pschema in outgester.query_oldpost_batch():
             if len(batch_post) > 0:
                 outgester.clean_oldpost(batch_post, pschema)
 
-        #        post_url = ingester.upsert_post(batch_post)
-        #        vocab_name = ingester.upsert_vocab_ignore_docfreq(batch_post)
-        #        ingester.upsert_vocab2post(batch_post, vocab_name, post_url)
                 delete_num += len(batch_post)
-                logger.info('okbot outgest: {} data deleted.'.format(delete_num))
+            logger.info('okbot outgest: {} data deleted.'.format(delete_num))
 
         logger.info('okbot outgest job finished. elapsed time: {:.2f} sec.'.format(time.time() - time_tic))
 
@@ -136,7 +132,7 @@ class Outgester(object):
 
     def query_oldpost_batch(self, batch_size=1000):
         psql = PsqlQuery()
-        fetched = psql.query(self.query_post_sql, self.fromdate)
+        fetched = psql.query(self.query_post_sql, (self.fromdate,))
         schema = psql.schema
 
         batch, i = [], 0

@@ -32,6 +32,8 @@ class Spider(models.Model):
     start = models.IntegerField(default=-1)
     end = models.IntegerField(default=-1)
     newest = models.IntegerField(default=-1)
+    page = models.IntegerField(default=10)
+    offset = models.IntegerField(default=10)
     status = models.CharField(max_length=255, default='debug')
     blacklist = models.ManyToManyField(Blacklist, blank=True)
 

@@ -6,10 +6,10 @@ from .models import Vocabulary, Post, Joblog#, Grammar
 
 
 
-#class PostAdmin(admin.ModelAdmin):
-#    list_display = ('title', 'tokenized', 'spider', 'last_update', 'allow_update')
-#    list_editable = ('allow_update',)
-#    search_fields = ('title',)
+class PostAdmin(admin.ModelAdmin):
+    list_display = ('title', 'tokenized', 'spider', 'publish_date', 'allow_update')
+    # list_editable = ('allow_update',)
+    search_fields = ('title',)
 
 class VocabularyAdmin(admin.ModelAdmin):
     list_display = ('name', 'doc_freq', 'stopword')
