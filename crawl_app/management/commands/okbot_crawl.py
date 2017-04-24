@@ -73,7 +73,7 @@ class Command(BaseCommand):
     help = '''
            start crawling ptt by given <spider-tag>.
            ex: python manage.py okbot_crawl <spider-tag>
-           '''
+    '''
     def add_arguments(self, parser):
         parser.add_argument('spider_tag', nargs=1, type=str)
 
