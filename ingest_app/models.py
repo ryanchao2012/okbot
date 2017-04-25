@@ -68,7 +68,7 @@ class Vocabulary(models.Model):
 class Joblog(models.Model):
     name = models.CharField(max_length=255)
     start_time = models.DateTimeField(default=timezone.now)
-    message = models.TextField()
+    result = models.TextField()
     finish_time = models.DateTimeField(default=timezone.now, blank=True, null=True)
     status = models.CharField(max_length=31, default='running')
 

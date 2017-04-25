@@ -2,6 +2,7 @@ __pycache__/
 build/
 *.pyc
 *.sql*
-nohup*
+*.out
+*.sh
 output/
 migrations/

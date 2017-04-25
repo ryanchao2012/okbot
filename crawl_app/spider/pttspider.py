@@ -50,10 +50,11 @@ class PttSpider(scrapy.Spider):
     content_xpath = '//div[@id="main-content"]'
     content_end = r'\n?-+\n'
 
-    def __init__(self, tag, entry, *args, **kwargs):
+    def __init__(self, tag, entry, jobid, *args, **kwargs):
         super(PttSpider, self).__init__(*args, **kwargs)
         self.tag = tag
         self.entry = entry
+        self.jobid = jobid
         self.results = None
 
         for k, v in kwargs.items():

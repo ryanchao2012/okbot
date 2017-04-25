@@ -122,6 +122,9 @@ class Outgester(object):
         qvocab_id = [v2p[schema['vocabulary_id']] for v2p in qvocab2post]
 
         vocab_cnt = collections.Counter(qvocab_id)
+        for vid in vocab_id:
+            if vid not in qvocab_id:
+                vocab_cnt[vid] = 0
         id_ = list(vocab_cnt.keys())
         freq = list(vocab_cnt.values())
 

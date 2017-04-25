@@ -55,24 +55,20 @@ class Command(BaseCommand):
                 vocab_name = ingester.upsert_vocab_ignore_docfreq(batch_post)
                 ingester.upsert_vocab2post(batch_post, vocab_name, post_url)
                 consumed_num += len(batch_post)
-            logger.info('okbot ingest: {} data consumed from {}.'.format(consumed_num, file_name))
-
-        logger.info('okbot ingest job finished. elapsed time: {} sec.'.format(time.time() - time_tic))
-
-
+            logger.info('okbot ingest: {} data are consumed from {}.'.format(consumed_num, file_name))
+        elapsed_time = time.time() - time_tic
+        logger.info('okbot ingest job finished. elapsed time: {:.2f} sec.'.format(elapsed_time))
         now = timezone.now()
         try:
             job = Joblog.objects.get(name=jobid)
             job.finish_time = now
+            job.result = 'Total {} records are ingestered. elapsed time: {:.2f} sec.'.format(consumed_num, elapsed_time)
         except Exception as e:
             logger.error(e)
             logger.error('command okbot_ingest, fail to fetch job log. id: {}. create a new one'.format(jobid))
-            # try:
             job = Joblog(name=jobid, start_time=now)
-            # except Exception as e:
-                # logger.error(e)
-                # logger.error('command okbot_ingest, fail to create job log')
-                # return
+            job.result = e
+
         finally:
             job.status = 'finished'
             job.save()

@@ -60,6 +60,5 @@ class Command(BaseCommand):
         finally:
             spider.save()
 
-
         logger.info('command: okbot_update: spider <{}> finished.'.format(tag))
 
