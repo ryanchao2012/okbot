@@ -40,7 +40,7 @@ if __name__ == '__main__':
         freq = spider[schema['freq']]
         if freq > 0:
             delta = (datetime.datetime.today() - datetime.datetime(1970,1,1)).days
-            #if delta % freq == 0:
-            #    __pipeline(tag)
-    __pipeline('Gossiping')
+            if delta % freq == 0:
+                __pipeline(tag)
+#    __pipeline('Gossiping')
 
