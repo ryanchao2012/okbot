@@ -149,7 +149,7 @@ def jaccard_similarity(vocab, doc):
 
 
 
-class Chatter(object):
+class Chat(object):
     def __init__(self, query, tokenizer='jieba'):
         self.query = query
         self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
@@ -162,4 +162,4 @@ class Chatter(object):
         )
 
         self.vschema = psql.schema
-        self.vocab = [{'word': ':'.join([q[vschema['word']], q[vschema['tag']]]),'termweight': 1.0, 'docfreq': q[vschema['doc_freq']]} for q in query_vocab]
+        # self.vocab = [{'word': ':'.join([q[vschema['word']], q[vschema['tag']]]),'termweight': 1.0, 'docfreq': q[vschema['doc_freq']]} for q in query_vocab]
