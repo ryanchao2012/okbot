@@ -50,32 +50,30 @@ class Command(BaseCommand):
 
         consumed_num = 0
         for batch_post in jlparser.batch_parse():
-            post_url = ingester.upsert_post(batch_post)
-            vocab_name = ingester.upsert_vocab_ignore_docfreq(batch_post)
-            ingester.upsert_vocab2post(batch_post, vocab_name, post_url)
-            consumed_num += len(batch_post)
-            logger.info('okbot ingest: {} data consumed from {}.'.format(consumed_num, file_name))
- 
-
-        logger.info('okbot ingest job finished. elapsed time: {} sec.'.format(time.time() - time_tic))
-
-
+            if len(batch_post) > 0:
+                post_url = ingester.upsert_post(batch_post)
+                vocab_name = ingester.upsert_vocab_ignore_docfreq(batch_post)
+                ingester.upsert_vocab2post(batch_post, vocab_name, post_url)
+                consumed_num += len(batch_post)
+            logger.info('okbot ingest: {} data are consumed from {}.'.format(consumed_num, file_name))
+        elapsed_time = time.time() - time_tic
+        logger.info('okbot ingest job finished. elapsed time: {:.2f} sec.'.format(elapsed_time))
         now = timezone.now()
         try:
             job = Joblog.objects.get(name=jobid)
             job.finish_time = now
+            job.result = 'Total {} records are ingestered. elapsed time: {:.2f} sec.'.format(consumed_num, elapsed_time)
         except Exception as e:
             logger.error(e)
             logger.error('command okbot_ingest, fail to fetch job log. id: {}. create a new one'.format(jobid))
-            # try:
             job = Joblog(name=jobid, start_time=now)
-            # except Exception as e:
-                # logger.error(e)
-                # logger.error('command okbot_ingest, fail to create job log')
-                # return
+            job.result = e
+
         finally:
             job.status = 'finished'
             job.save()
+
+
 
 
 class Ingester(object):
@@ -231,15 +229,16 @@ class Ingester(object):
         return url
         
 
-        
+
 
 
 
 class CrawledJLParser(object):
 
-    def __init__(self, jlpath, tokenizer):
+    def __init__(self, jlpath, tokenizer, fromdatetime=None):
         self.jlpath = jlpath
         self.tokenizer = tokenizer
+        self.fromdatetime = fromdatetime
 
     def batch_parse(self, batch_size=1000):
         with open(self.jlpath, 'r') as f:
@@ -250,16 +249,25 @@ class CrawledJLParser(object):
                 i += 1
                 if i >= batch_size:
                     i = 0
-                    yield [ps for ps in parsed if ps]
+                    yield [ps for ps in parsed if bool(ps)]
                     parsed = []
 
-            yield [ps for ps in parsed[:i] if ps]
+            yield [ps for ps in parsed[:i] if bool(ps)]
 
 
     def _parse(self, line):
         try:
             post = json.loads(line)
+            url = post['url']
+            date = timezone.datetime.strptime(post['date'], '%a %b %d %H:%M:%S %Y')
+            if self.fromdatetime is not None:
+                if self.fromdatetime > date:
+                    logger.info('command okbot_ingest, jsonline record is too old, ignored. url: {}'.format(url))
+                    return {}
+
+
             title_ = post['title']
+
             m = re.search('[\]|］]', title_)
             if m is None:
                 title = title_.strip()
@@ -276,9 +284,9 @@ class CrawledJLParser(object):
                 'title_tok': title_tok,
                 'title_vocab': ' '.join(title_vocab),
                 'title_grammar': ' '.join(title_grammar),
-                'url': post['url'],
+                'url': url,
                 'author': post['author'],
-                'date': timezone.datetime.strptime(post['date'], '%a %b %d %H:%M:%S %Y'),
+                'date': date,
                 'push': '\n'.join(post['push']),
             }
 

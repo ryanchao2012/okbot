@@ -5,15 +5,14 @@ from .models import Spider, Blacklist, Joblog
 
 
 class SpiderAdmin(admin.ModelAdmin):
-    list_display = ('tag', 'newest', 'start', 'end', 'status')
-    list_editable = ('start', 'end')
+    list_display = ('tag', 'start', 'end', 'newest', 'offset', 'page', 'freq', 'status')
+    # list_editable = ('start', 'end')
     readonly_fields = ('newest', 'status')
 
 
 class BlacklistAdmin(admin.ModelAdmin):
-    list_display = ('pk', 'btype', 'phrases')
+    list_display = ('description', 'btype', 'phrases')
     list_editable = ('btype', 'phrases')
-    list_display_links = ('pk',)
 
 
 
@@ -29,3 +28,4 @@ class JoblogAdmin(admin.ModelAdmin):
 admin.site.register(Spider, SpiderAdmin)
 admin.site.register(Blacklist, BlacklistAdmin)
 admin.site.register(Joblog, JoblogAdmin)
+

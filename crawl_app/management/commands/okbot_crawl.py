@@ -33,7 +33,8 @@ def _crawler_wrapper(f):
         settings.set('FEED_URI', 'crawl_app/spider/output/{}.jl'.format(params['jobid']))
         settings.set('LOG_FILE', 'crawl_app/spider/output/log/log-{}.txt'.format(params['jobid']))
         process = CrawlerProcess(settings)
-        process.crawl(PttSpider, params['tag'], params['entry'], 
+        process.crawl(PttSpider, 
+            params['tag'], params['entry'], params['jobid'],
             blacklist=params['blacklist'],
             start_idx=params['start_idx'],
             end_idx=params['end_idx']
@@ -44,26 +45,22 @@ def _crawler_wrapper(f):
         t = time.time()
         process.start()
 
-        logger.info('okbot crawl job finished. elapsed time: {} sec.'.format(time.time() - t))
+        logger.info('okbot crawl job finished. elapsed time: {:.2f} sec.'.format(time.time() - t))
         now = timezone.now()
         try:
             job = Joblog.objects.get(name=params['jobid'])
-            # job.result = json.dumps(result, indent = 4)
             job.finish_time = now
             
         except Exception as e:
             msg = 'command okbot_crawl, fail to fetch job log. id: {}. create a new one'.format(params['jobid'])
             logger.error(e)
             logger.error(msg)            
-            # try:                
             job = Joblog(name=params['jobid'], start_time=now)
-                # job.result = '\n'.join([e, msg])
-            # except Exception as e:
-                # logger.error(e)
-                # logger.error('command okbot_crawl, fail to create job log')
-                # return
-        job.status = 'finished'
-        job.save()
+            job.result = e
+
+        finally:
+            job.status = 'finished'
+            job.save()
 
     return crawler_wrapper_
 
@@ -73,7 +70,7 @@ class Command(BaseCommand):
     help = '''
            start crawling ptt by given <spider-tag>.
            ex: python manage.py okbot_crawl <spider-tag>
-           '''
+    '''
     def add_arguments(self, parser):
         parser.add_argument('spider_tag', nargs=1, type=str)
 
@@ -87,25 +84,14 @@ class Command(BaseCommand):
             return -1
         if spider.status != 'pass':
             logger.warning('command: okbot_crawl, spider is not in "pass" status, please update spider first.')
-            return
+            return -2
 
         now = timezone.now()
         jobid = '{}.{}.{}.{}'.format(tag.lower(), spider.start, spider.end, now.strftime('%Y-%m-%d-%H-%M-%S'))
-        # try:
         Joblog(name=jobid, start_time=now, status='running').save()
-        # except Exception as e:
-        #     logger.error(e)
-        #     logger.error('command okbot_crawl, fail to create job log')
         self._crawl(spider, jobid)
 
-        # try:
-        #     job = Joblog.objects.get(name=jobid)
-        #     if job.status != 'finished':
-        #         job.status = 'terminated'
-        #         job.save()
-        # except Exception as e:
-        #     logger.error(e)
-        #     logger.error('command okbot_crawl, fail to final check job log. id: {}.'.format(jobid))
+        return jobid
 
 
     @_crawler_wrapper
@@ -118,9 +104,9 @@ class Command(BaseCommand):
             type_ = Blacklist.BLIST_TYPE_CHOICES[b.btype][1]
             if type_ in btype:
                 if type_ in blacklist:
-                    blacklist[type_].extend([p.strip() for p in b.phrases.split(',')])
+                    blacklist[type_].extend([p.strip() for p in b.phrases.split(',') if bool(p.strip())])
                 else:
-                    blacklist[type_] = [p.strip() for p in b.phrases.split(',')]
+                    blacklist[type_] = [p.strip() for p in b.phrases.split(',') if bool(p.strip())]
 
         newest_idx = spider.newest
         start_idx = spider.start

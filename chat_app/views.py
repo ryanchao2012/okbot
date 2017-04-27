@@ -194,7 +194,7 @@ def _chat_query(text):
         )
         psql = PsqlQuery()
         allpost = psql.query('''
-                            SELECT tokenized, grammar, push FROM ingest_app_post WHERE id IN %s;
+                            SELECT tokenized, grammar, push, url FROM ingest_app_post WHERE id IN %s;
                           ''', (tuple(query_pid),)
         )
         pschema = psql.schema
@@ -216,7 +216,7 @@ def _chat_query(text):
                 jaccard_top_score = score
                 jaccard_top_post = [post]
 
-        logger.info('#{:.2f}:Top post(tfidf): {}'.format(tfidf_top_score, [ p[pschema['tokenized']] for p in tfidf_top_post]))
+        logger.info('#{:.2f}:Top post(tfidf): {}, {}'.format(tfidf_top_score, [ p[pschema['tokenized']] for p in tfidf_top_post], tfidf_top_post[0][pschema['url']]))
         logger.info('#{:.2f}:Top post(jaccard): {}'.format(jaccard_top_score, [ p[pschema['tokenized']] for p in jaccard_top_post]))
         final_post = tfidf_top_post[random.randint(0, len(tfidf_top_post)-1)]
         push = [p[p.find(':')+1 :].strip() for p in final_post[pschema['push']].split('\n')]

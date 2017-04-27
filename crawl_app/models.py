@@ -16,6 +16,7 @@ class Blacklist(models.Model):
         (3, "author"),
         (4, "audience"),
     )
+    description = models.CharField(max_length=31, default='')
     btype = models.IntegerField(choices=BLIST_TYPE_CHOICES, default=0, verbose_name=u'type')
     phrases = models.CharField(max_length=4095)
 
@@ -32,6 +33,9 @@ class Spider(models.Model):
     start = models.IntegerField(default=-1)
     end = models.IntegerField(default=-1)
     newest = models.IntegerField(default=-1)
+    page = models.IntegerField(default=10)
+    offset = models.IntegerField(default=10)
+    freq = models.IntegerField(default=1)
     status = models.CharField(max_length=255, default='debug')
     blacklist = models.ManyToManyField(Blacklist, blank=True)
 

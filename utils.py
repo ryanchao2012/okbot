@@ -35,6 +35,14 @@ class PsqlAbstract(object):
         cursor.close()
         connect.close()
 
+    def _execute(self, sql_string, data):
+        connect = psycopg2.connect(database=self.db, user=self.user, password=self.pw)
+        cursor = connect.cursor()
+        cursor.execute(sql_string, data)
+        ret = cursor.fetchone()
+        PsqlAbstract._close(connect, cursor)
+        return ret
+
 
 class PsqlQuery(PsqlAbstract):
 
@@ -49,6 +57,15 @@ class PsqlQuery(PsqlAbstract):
     def _upsert(self, connect, cursor, query_=None, data=None):
         cursor.execute(query_, data)
         connect.commit()
+
+    def delete(self, q, data=None):
+        self._delete(query_=q, data=data)
+
+    @PsqlAbstract.session()
+    def _delete(self, connect, cursor, query_=None, data=None):
+        cursor.execute(query_, data)
+        connect.commit()
+
 
     def query(self, q, data=None, skip=False):
         if not skip:
