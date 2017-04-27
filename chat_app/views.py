@@ -102,7 +102,9 @@ def fb_webhook(request):
         except Exception as e:
             logger.warning(e)
             return HttpResponse()
-
+        print('==========')
+        print(incoming)
+        print('==========')
         for entry in incoming['entry']:
             for message_evt in entry['messaging']:
                 sender_id = message_evt.get('sender').get('id')
