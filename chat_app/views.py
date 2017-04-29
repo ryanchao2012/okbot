@@ -3,7 +3,8 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
 from linebot import LineBotApi, WebhookParser
 from linebot.exceptions import InvalidSignatureError, LineBotApiError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage
+from django.template.response import TemplateResponse
 
 import re
 import json
@@ -37,6 +38,13 @@ OKBOT_VERIFY_TOKEN=os.environ['OKBOT_VERIFY_TOKEN']
 # Create your views here.
 
 GRAPH_API_URL = 'https://graph.facebook.com/v2.6/me/messages'
+
+
+def home(request):
+    response = TemplateResponse(request, 'privacypolicy.html', {})
+    return response
+
+
 
 def graph_api_post(f):
     params = {
@@ -103,7 +111,9 @@ def fb_webhook(request):
         except Exception as e:
             logger.warning(e)
             return HttpResponse()
-
+        print('==========')
+        print(incoming)
+        print('==========')
         for entry in incoming['entry']:
             for message_evt in entry['messaging']:
                 sender_id = message_evt.get('sender').get('id')
@@ -195,7 +205,7 @@ def _chat_query(text):
         )
         psql = PsqlQuery()
         allpost = psql.query('''
-                            SELECT tokenized, grammar, push, url FROM ingest_app_post WHERE id IN %s;
+                            SELECT tokenized, grammar, push, url, publish_date FROM ingest_app_post WHERE id IN %s ORDER BY publish_date DESC;
                           ''', (tuple(query_pid),)
         )
         pschema = psql.schema
@@ -205,18 +215,21 @@ def _chat_query(text):
         jaccard_top_post = []
         jaccard_top_score = -9999.0
         tolerance = 0
-        for post in allpost:
+        for i, post in enumerate(allpost):
+            if i < 5:
+                print('@@@@', post[pschema['publish_date']], post[pschema['tokenized']])
             doc = [':'.join([t, g]) for t, g in zip(post[pschema['tokenized']].split(), post[pschema['grammar']].split())]
             score = tfidf_jaccard_similarity(vocab, doc)
             # score = bm25_similarity(vocab, doc)
-            if score + tolerance >= tfidf_top_score:
+            if score + tolerance > tfidf_top_score:
                 tfidf_top_score = score
                 tfidf_top_post = [post]
             score = jaccard_similarity(vocab, doc)
             if score + tolerance >= jaccard_top_score:
                 jaccard_top_score = score
                 jaccard_top_post = [post]
-
+        print('@@@@@', i, '@@@@@')
+        print('@@@@@', post[pschema['publish_date']])
         logger.info('#{:.2f}:Top post(tfidf): {}, {}'.format(tfidf_top_score, [ p[pschema['tokenized']] for p in tfidf_top_post], tfidf_top_post[0][pschema['url']]))
         logger.info('#{:.2f}:Top post(jaccard): {}'.format(jaccard_top_score, [ p[pschema['tokenized']] for p in jaccard_top_post]))
         final_post = tfidf_top_post[random.randint(0, len(tfidf_top_post)-1)]
