@@ -1,7 +1,9 @@
 import psycopg2
 import jieba.posseg as pseg
 import math
+import numpy as np
 import time
+import random
 import os
 from chat_app.models import JiebaTagWeight
 
@@ -172,6 +174,7 @@ class Chat(object):
     default_tokenizer = 'jieba'
     ranking_factor = 0.95
     max_query_post_num = 20000
+    # max_top_post_num = 3
 
     query_vocab_sql = '''
         SELECT * FROM ingest_app_vocabulary WHERE name IN %s;
@@ -205,6 +208,7 @@ class Chat(object):
     def _query_vocab(self, w2v=False):
         
         vocab_name = ['--+--'.join([t.word, t.flag, self.default_tokenizer]) for t in self.tok]
+
         # TODO: merge word2vec model here
         # ===============================
         if w2v:
@@ -233,7 +237,7 @@ class Chat(object):
             if not (q[vschema['stopword']]) and q[vschema['doc_freq']] < self.vocab_docfreq_th 
         ]
 
-        return self
+        # return self
 
     def _query_post(self):
         print(self.vocab)
@@ -246,9 +250,9 @@ class Chat(object):
         self.allpost = psql.query(self.query_post_sql, (tuple(query_pid),))
         self.pschema = psql.schema
 
-        return self
+        # return self
 
-    def _similarity(self, scorer=tfidf_jaccard_similarity):
+    def _cal_similarity(self, scorer=tfidf_jaccard_similarity):
         post_buffer = []
         score_buffer = []
 
@@ -259,10 +263,110 @@ class Chat(object):
             post_buffer.append(post)
             score_buffer.append(scorer(self.vocab, doc))
 
+        self.similar_post = post_buffer
+        self.similar_score = score_buffer       
+        # return self
 
-        pass
+
+    def _ranking_post(self):
+        # TODO: add other feature weighting here
+        # ======================================
+        idx_ranking = np.asarray(self.similar_score).argsort()[::-1]
+        top_post = []
+        top_score = []
+        max_score = self.similar_score[idx_ranking[0]]
+        for idx in idx_ranking:
+            if self.similar_score[idx] / max_score < self.ranking_factor:
+                break
+            else:
+                top_post.append(self.similar_post[idx])
+                top_score.append(self.similar_score[idx])
+        # ======================================
+
+        self.top_post = top_post
+        self.post_score = top_score
+        # return self
 
 
+    def _clean_push(self):
+        
+        push_pool = []
+
+        for post, score in zip(self.top_post, self.post_score):
+            union_push = {}
+            anony_num = 0
+            for line, mix in enumerate(post[self.pschema['push']].split('\n')):
+                idx = mix.find(':')
+                if idx < 0:
+                    anony_num += 1
+                    union_push['anony@' + str(anony_num)] = [{'content': mix.strip(), 'line': line}]
+                else:
+                    audience, push = mix[:idx].strip(), mix[idx+1:].strip()
+
+                    # TODO: add blacklist
+                    # ====================
+
+
+                    # ====================
+
+                    if audience in union_push:
+                        union_push[audience]['push'].append({'content': push, 'line': line})
+                    else:
+                        union_push[audience]['push'] = [{'content': push, 'line': line}]
+
+            # flatten_push = []
+
+            for key, allpush in union_push.items():
+                appendpush = []
+                line = 0
+                append = False
+                for p in allpush['push']:
+
+                    if (p['line'] - line) < 2 and append:
+                        appendpush[-1] += p['content']
+                        append = False
+
+                    else:
+                        appendpush.append(p['content'])
+                        append = True
+
+                    line = p['line']
+
+                push_pool.append({'push': appendpush, 'post_score': score})
+
+        self.push_pool = push_pool
+
+        # return self
+
+
+    def _ranking_push(self):
+        # TODO: ranking push
+        # ==================
+        push = []
+        for pool in self.push_pool:
+            push.extend(pool['push'])
+
+        final_push = push[random.randint(0, len(push)-1)]
+        # ==================
+
+        # return final_push
+
+    def retrieve(self):
+        self._query_vocab()
+        self._query_post()
+        self._cal_similarity()
+        self._ranking_post()
+        self._clean_push()
+        push = self._ranking_push()
+
+        return push
+
+class MessengerBot(Chat):
+    pass
+
+
+class LineBot(Chat):
+    pass
 
 
 

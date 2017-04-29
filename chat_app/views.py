@@ -15,8 +15,7 @@ import random
 import jieba.posseg as pseg
 import logging
 from utils import (PsqlQuery, Tokenizer, 
-        bm25_similarity, jaccard_similarity, 
-        tfidf_jaccard_similarity)
+        MessengerBot, LineBot, tfidf_jaccard_similarity)
 
 
 logger = logging.getLogger('okbot_chat_view')
