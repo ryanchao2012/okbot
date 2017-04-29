@@ -5,6 +5,7 @@ from linebot import LineBotApi, WebhookParser
 from linebot.exceptions import InvalidSignatureError, LineBotApiError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
+import re
 import json
 import requests
 import os
@@ -79,7 +80,7 @@ def line_webhook(request):
                         logger.info('reply message: query: {}, reply: {}'.format(query, reply))
                         line_bot_api.reply_message(
                             event.reply_token,
-                            TextSendMessage(text=reply) 
+                            _message_obj(reply) 
                         )
                     except Exception as e:
                         logger.error('okbot.chat_app.line_webhook, message: {}'.format(e))
@@ -230,5 +231,15 @@ def _chat_query(text):
         return default_reply[random.randint(0, len(default_reply)-1)]
 
 
-
-
+def _message_obj(reply):
+    if 'imgur' in reply and (len(reply) == 24 or len(reply) == 30):
+        if re.search(r'http:\/\/imgur\.com\/[a-z0-9A-Z]{7}', reply):
+            imgur_url = re.sub('http', 'https', reply)
+        elif re.search(r'http:\/\/i\.imgur\.com\/[a-z0-9A-Z]{7}\.jpg', reply):
+            imgur_url = re.sub('http', 'https', reply)
+        return ImageSendMessage(
+                original_content_url=imgur_url,
+                preview_image_url=imgur_url
+            )
+    else:
+        return TextSendMessage(text=reply)
