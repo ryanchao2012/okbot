@@ -4,6 +4,7 @@ from django.views.decorators.csrf import csrf_exempt
 from linebot import LineBotApi, WebhookParser
 from linebot.exceptions import InvalidSignatureError, LineBotApiError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from django.template.response import TemplateResponse
 
 import json
 import requests
@@ -36,6 +37,13 @@ OKBOT_VERIFY_TOKEN=os.environ['OKBOT_VERIFY_TOKEN']
 # Create your views here.
 
 GRAPH_API_URL = 'https://graph.facebook.com/v2.6/me/messages'
+
+
+def home(request):
+    response = TemplateResponse(request, 'privacypolicy.html', {})
+    return response
+
+
 
 def graph_api_post(f):
     params = {
