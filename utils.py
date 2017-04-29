@@ -3,7 +3,7 @@ import jieba.posseg as pseg
 import math
 import time
 import os
-
+from chat_app.models import JiebaTagWeight
 
 class PsqlAbstract(object):
     DB_USER = os.environ['OKBOT_DB_USER']
@@ -167,16 +167,105 @@ def jaccard_similarity(vocab, doc):
 
 
 class Chat(object):
-    def __init__(self, query, tokenizer='jieba'):
-        self.query = query
-        self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
-        vocab_name = ['--+--'.join([t.word, t.flag, 'jieba']) for t in tok]
-        query_vocab = list(psql.query( '''
-                                                SELECT * FROM ingest_app_vocabulary
-                                                WHERE name IN %s;
-                                            ''', (tuple(vocab_name),)
-                                    )
-        )
+    tag_weight = {}
+    vocab_docfreq_th = 10000
+    default_tokenizer = 'jieba'
+    ranking_factor = 0.95
+    max_query_post_num = 20000
 
-        self.vschema = psql.schema
-        # self.vocab = [{'word': ':'.join([q[vschema['word']], q[vschema['tag']]]),'termweight': 1.0, 'docfreq': q[vschema['doc_freq']]} for q in query_vocab]
+    query_vocab_sql = '''
+        SELECT * FROM ingest_app_vocabulary WHERE name IN %s;
+    '''
+    query_vocab2post_sql = '''
+        SELECT post_id FROM ingest_app_vocabulary_post 
+        WHERE vocabulary_id IN %s;
+    '''
+    query_post_sql = '''
+        SELECT tokenized, grammar, push, url, publish_date
+        FROM ingest_app_post WHERE id IN %s
+        ORDER BY publish_date DESC;
+    '''
+
+
+    def _pre_rulecheck(self, raw):
+        refined, action = raw, 0
+        return refined, action
+
+
+    def __init__(self, query, tokenizer='jieba'):
+        self.query, action = self._pre_rulecheck(query)
+        self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
+
+        if not bool(Chat.tag_weight):
+            jtag = JiebaTagWeight.object.all()
+            for jt in jtag: Chat.tag_weight[jt.name] = jt.weight
+
+
+
+    def _query_vocab(self, w2v=False):
+        
+        vocab_name = ['--+--'.join([t.word, t.flag, self.default_tokenizer]) for t in self.tok]
+        # TODO: merge word2vec model here
+        # ===============================
+        if w2v:
+            pass
+        psql = PsqlQuery()
+        qvocab = list(psql.query(self.query_vocab_sql, (tuple(vocab_name),)))
+        vschema = psql.schema
+
+        _tag_weight = {
+            q[vschema['tag']]: Chat.tag_weight[q[vschema['tag']]] 
+            if q[vschema['tag']] in Chat.tag_weight else 1.0 for q in qvocab
+        }
+        # ===============================
+
+        self.vocab = [
+            {
+                'word': ':'.join([q[vschema['word']], q[vschema['tag']]]),
+                'termweight': _tag_weight[q[vschema['tag']]], 
+                'docfreq': q[vschema['doc_freq']]
+            } for q in qvocab
+        ]
+
+        self.vid = [
+            q[vschema['id']] 
+            for q in qvocab 
+            if not (q[vschema['stopword']]) and q[vschema['doc_freq']] < self.vocab_docfreq_th 
+        ]
+
+        return self
+
+    def _query_post(self):
+        print(self.vocab)
+
+        query_pid = list(PsqlQuery().query(
+                        self.query_vocab2post_sql, (tuple(self.vid),)
+                    )
+        )
+        psql = PsqlQuery()
+        self.allpost = psql.query(self.query_post_sql, (tuple(query_pid),))
+        self.pschema = psql.schema
+
+        return self
+
+    def _similarity(self, scorer=tfidf_jaccard_similarity):
+        post_buffer = []
+        score_buffer = []
+
+        for i, post in enumerate(self.allpost):
+            if i >= self.max_query_post_num:
+                break
+            doc = [':'.join([t, g]) for t, g in zip(post[self.pschema['tokenized']].split(), post[self.pschema['grammar']].split())]
+            post_buffer.append(post)
+            score_buffer.append(scorer(self.vocab, doc))
+
+
+        pass
+
+
+
+
+
+
+
+
