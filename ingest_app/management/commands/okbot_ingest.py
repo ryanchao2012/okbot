@@ -223,7 +223,7 @@ class Ingester(object):
             psql = PsqlQuery()
             psql.upsert(self.upsert_post_sql, locals())
         except Exception as e:
-            print(post_num)
+            logger.error(e)
             raise e
 
         return url
