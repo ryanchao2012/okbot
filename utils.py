@@ -5,6 +5,7 @@ import numpy as np
 import time
 import random
 import os
+import json
 import logging
 from chat_app.models import JiebaTagWeight
 
@@ -201,10 +202,10 @@ class Chat(object):
         self.query, action = self._pre_rulecheck(query)
         self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
 
-        #if not bool(Chat.tag_weight):
-        #    jtag = JiebaTagWeight.objects.all()
-        #    for jt in jtag: Chat.tag_weight[jt.name] = jt.weight
-
+        if not bool(Chat.tag_weight):
+            jtag = JiebaTagWeight.objects.all()
+            for jt in jtag: 
+                Chat.tag_weight[jt.name] = {'weight': jt.weight, 'punish': jt.punish_factor}
 
 
     def _query_vocab(self, w2v=False):
@@ -220,7 +221,7 @@ class Chat(object):
         vschema = psql.schema
 
         _tag_weight = {
-            q[vschema['tag']]: Chat.tag_weight[q[vschema['tag']]] 
+            q[vschema['tag']]: Chat.tag_weight[q[vschema['tag']]]['weight'] 
             if q[vschema['tag']] in Chat.tag_weight else 1.0 for q in qvocab
         }
         # ===============================
@@ -241,7 +242,8 @@ class Chat(object):
 
 
     def _query_post(self):
-        # print(self.vocab)
+        vocab_json = json.dumps(self.vocab, indent=4, ensure_ascii=False, sort_keys=True)
+        self.logger.info(vocab_json)
 
         query_pid = list(PsqlQuery().query(
                         self.query_vocab2post_sql, (tuple(self.vid),)
@@ -360,7 +362,7 @@ class Chat(object):
         except Exception as e:
             default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
             push = default_reply[random.randint(0, len(default_reply)-1)]
-            logger.warning('Query failed: {}'.format(self.query))
+            self.logger.warning('Query failed: {}'.format(self.query))
 
         return push
 
