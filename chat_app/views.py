@@ -244,11 +244,16 @@ def _chat_query(text):
 
 
 def _message_obj(reply):
-    if 'imgur' in reply and (len(reply) == 24 or len(reply) == 30):
-        if re.search(r'http:\/\/imgur\.com\/[a-z0-9A-Z]{7}', reply):
-            imgur_url = re.sub('http', 'https', reply)
-        elif re.search(r'http:\/\/i\.imgur\.com\/[a-z0-9A-Z]{7}\.jpg', reply):
-            imgur_url = re.sub('http', 'https', reply)
+    if 'imgur' in reply:
+        match_web = re.search(r'http:\/\/imgur\.com\/[a-z0-9A-Z]{7}', reply)
+        match_jpg = re.search(r'http:\/\/(i|m)\.imgur\.com\/[a-z0-9A-Z]{7}\.jpg', reply)
+        if match_web:
+            match = match_web.group()
+        elif match_jpg:
+            match = match_jpg.group()
+        else:
+            match = reply
+        imgur_url = re.sub('http', 'https', match)
         return ImageSendMessage(
                 original_content_url=imgur_url,
                 preview_image_url=imgur_url
