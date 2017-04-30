@@ -5,6 +5,7 @@ import numpy as np
 import time
 import random
 import os
+import logging
 from chat_app.models import JiebaTagWeight
 
 class PsqlAbstract(object):
@@ -169,12 +170,13 @@ def jaccard_similarity(vocab, doc):
 
 
 class Chat(object):
+    logger = logging.getLogger('okbot_chat_view')
     tag_weight = {}
     vocab_docfreq_th = 10000
     default_tokenizer = 'jieba'
-    ranking_factor = 0.95
-    max_query_post_num = 20000
-    # max_top_post_num = 3
+    ranking_factor = 0.8
+    max_query_post_num = 15000
+    max_top_post_num = 5
 
     query_vocab_sql = '''
         SELECT * FROM ingest_app_vocabulary WHERE name IN %s;
@@ -199,9 +201,9 @@ class Chat(object):
         self.query, action = self._pre_rulecheck(query)
         self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
 
-        if not bool(Chat.tag_weight):
-            jtag = JiebaTagWeight.object.all()
-            for jt in jtag: Chat.tag_weight[jt.name] = jt.weight
+        #if not bool(Chat.tag_weight):
+        #    jtag = JiebaTagWeight.objects.all()
+        #    for jt in jtag: Chat.tag_weight[jt.name] = jt.weight
 
 
 
@@ -237,10 +239,9 @@ class Chat(object):
             if not (q[vschema['stopword']]) and q[vschema['doc_freq']] < self.vocab_docfreq_th 
         ]
 
-        # return self
 
     def _query_post(self):
-        print(self.vocab)
+        # print(self.vocab)
 
         query_pid = list(PsqlQuery().query(
                         self.query_vocab2post_sql, (tuple(self.vid),)
@@ -250,7 +251,6 @@ class Chat(object):
         self.allpost = psql.query(self.query_post_sql, (tuple(query_pid),))
         self.pschema = psql.schema
 
-        # return self
 
     def _cal_similarity(self, scorer=tfidf_jaccard_similarity):
         post_buffer = []
@@ -265,7 +265,6 @@ class Chat(object):
 
         self.similar_post = post_buffer
         self.similar_score = score_buffer       
-        # return self
 
 
     def _ranking_post(self):
@@ -275,8 +274,8 @@ class Chat(object):
         top_post = []
         top_score = []
         max_score = self.similar_score[idx_ranking[0]]
-        for idx in idx_ranking:
-            if self.similar_score[idx] / max_score < self.ranking_factor:
+        for m, idx in enumerate(idx_ranking):
+            if (self.similar_score[idx] / max_score) < self.ranking_factor or m > self.max_top_post_num:
                 break
             else:
                 top_post.append(self.similar_post[idx])
@@ -285,7 +284,9 @@ class Chat(object):
 
         self.top_post = top_post
         self.post_score = top_score
-        # return self
+
+        for p, s in zip(top_post, top_score):
+            print(p[self.pschema['tokenized']], p[self.pschema['url']], s)
 
 
     def _clean_push(self):
@@ -299,7 +300,9 @@ class Chat(object):
                 idx = mix.find(':')
                 if idx < 0:
                     anony_num += 1
-                    union_push['anony@' + str(anony_num)] = [{'content': mix.strip(), 'line': line}]
+                    name = 'anony@' + str(anony_num)
+                    union_push[name] = {}
+                    union_push[name]['push'] = [{'content': mix.strip(), 'line': line}]
                 else:
                     audience, push = mix[:idx].strip(), mix[idx+1:].strip()
 
@@ -308,27 +311,22 @@ class Chat(object):
 
 
                     # ====================
-
                     if audience in union_push:
                         union_push[audience]['push'].append({'content': push, 'line': line})
                     else:
+                        union_push[audience] = {}
                         union_push[audience]['push'] = [{'content': push, 'line': line}]
-
-            # flatten_push = []
 
             for key, allpush in union_push.items():
                 appendpush = []
-                line = 0
-                append = False
+                line = -10
                 for p in allpush['push']:
 
-                    if (p['line'] - line) < 2 and append:
+                    if (p['line'] - line) < 2:
                         appendpush[-1] += p['content']
-                        append = False
 
                     else:
                         appendpush.append(p['content'])
-                        append = True
 
                     line = p['line']
 
@@ -336,7 +334,7 @@ class Chat(object):
 
         self.push_pool = push_pool
 
-        # return self
+        print('@@@len(push_pool)', len(push_pool))
 
 
     def _ranking_push(self):
@@ -349,15 +347,20 @@ class Chat(object):
         final_push = push[random.randint(0, len(push)-1)]
         # ==================
 
-        # return final_push
+        return final_push
 
     def retrieve(self):
-        self._query_vocab()
-        self._query_post()
-        self._cal_similarity()
-        self._ranking_post()
-        self._clean_push()
-        push = self._ranking_push()
+        try:
+            self._query_vocab()
+            self._query_post()
+            self._cal_similarity()
+            self._ranking_post()
+            self._clean_push()
+            push = self._ranking_push()
+        except Exception as e:
+            default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
+            push = default_reply[random.randint(0, len(default_reply)-1)]
+            logger.warning('Query failed: {}'.format(self.query))
 
         return push
 
