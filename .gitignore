@@ -4,5 +4,6 @@ build/
 *.sql*
 *.out
 *.sh
+*.bin
 output/
 migrations/

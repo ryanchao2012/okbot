@@ -27,6 +27,8 @@ ch.setFormatter(chformatter)
 logger.addHandler(ch)
 
 
+
+
 line_bot_api = LineBotApi(os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
 line_webhook_parser = WebhookParser(os.environ['LINE_CHANNEL_SECRET'])
 
@@ -167,82 +169,6 @@ def send_typing_bubble(sender_id, onoff=False):
     return data, 'send typing bubble: {}.'.format(typing)
 
 
-# def _chat_query(text):
-#     try:
-#         tok, words, flags = Tokenizer('jieba').cut(text)
-#         vocab_name = ['--+--'.join([t.word, t.flag, 'jieba']) for t in tok]
-#         psql = PsqlQuery()
-#         query_vocab = list(psql.query( '''
-#                                                 SELECT * FROM ingest_app_vocabulary 
-#                                                 WHERE name IN %s;
-#                                             ''', (tuple(vocab_name),)
-#                                     )
-#         )
-#         vschema = psql.schema
-
-#         tag_weight = {}
-#         for q in query_vocab:
-#             if q[vschema['tag']][0] == 'n':
-#                 tag_weight[q] = 2.0
-#             elif q[vschema['tag']][0] == 'v':
-#                 tag_weight[q] = 1.2
-#             elif q[vschema['tag']][0] == 'i':
-#                 tag_weight[q] = 2.5
-#             else: tag_weight[q] = 1.0
-
-#         vocab = [{'word': ':'.join([q[vschema['word']], q[vschema['tag']]]),'termweight': tag_weight[q], 'docfreq': q[vschema['doc_freq']]} for q in query_vocab]
-        
-
-#         query_vid = [q[vschema['id']] for q in query_vocab if not (q[vschema['stopword']]) and q[vschema['doc_freq']] < 10000 ]
-#         print(vocab)
-
-#         query_pid = list(PsqlQuery().query( '''
-#                                                 SELECT post_id FROM ingest_app_vocabulary_post 
-#                                                 WHERE vocabulary_id IN %s;
-#                                             ''', (tuple(query_vid),)
-#                                     )
-#         )
-#         psql = PsqlQuery()
-#         allpost = psql.query('''
-#                             SELECT tokenized, grammar, push, url, publish_date FROM ingest_app_post WHERE id IN %s ORDER BY publish_date DESC;
-#                           ''', (tuple(query_pid),)
-#         )
-#         pschema = psql.schema
-
-#         tfidf_top_post = []
-#         tfidf_top_score = -9999.0
-#         jaccard_top_post = []
-#         jaccard_top_score = -9999.0
-#         tolerance = 0
-#         for i, post in enumerate(allpost):
-#             if i < 5:
-#                 print('@@@@', post[pschema['publish_date']], post[pschema['tokenized']])
-#             doc = [':'.join([t, g]) for t, g in zip(post[pschema['tokenized']].split(), post[pschema['grammar']].split())]
-#             score = tfidf_jaccard_similarity(vocab, doc)
-#             # score = bm25_similarity(vocab, doc)
-#             if score + tolerance > tfidf_top_score:
-#                 tfidf_top_score = score
-#                 tfidf_top_post = [post]
-#             score = jaccard_similarity(vocab, doc)
-#             if score + tolerance >= jaccard_top_score:
-#                 jaccard_top_score = score
-#                 jaccard_top_post = [post]
-#         print('@@@@@', i, '@@@@@')
-#         print('@@@@@', post[pschema['publish_date']])
-#         logger.info('#{:.2f}:Top post(tfidf): {}, {}'.format(tfidf_top_score, [ p[pschema['tokenized']] for p in tfidf_top_post], tfidf_top_post[0][pschema['url']]))
-#         logger.info('#{:.2f}:Top post(jaccard): {}'.format(jaccard_top_score, [ p[pschema['tokenized']] for p in jaccard_top_post]))
-#         final_post = tfidf_top_post[random.randint(0, len(tfidf_top_post)-1)]
-#         push = [p[p.find(':')+1 :].strip() for p in final_post[pschema['push']].split('\n')]
-#         select_push = push[random.randint(0, len(push)-1)]
-#         return select_push
-
-#     except Exception as e:
-#         logger.error(e)
-#         default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
-
-#         return default_reply[random.randint(0, len(default_reply)-1)]
-
-
 def _message_obj(reply):
     if 'imgur' in reply:
         match_web = re.search(r'http:\/\/imgur\.com\/[a-z0-9A-Z]{7}', reply)
@@ -260,3 +186,7 @@ def _message_obj(reply):
             )
     else:
         return TextSendMessage(text=reply)
+
+
+
+

@@ -7,6 +7,8 @@ import random
 import os
 import json
 import logging
+import gensim
+
 from chat_app.models import JiebaTagWeight
 
 class PsqlAbstract(object):
@@ -173,6 +175,7 @@ def jaccard_similarity(vocab, doc):
 class Chat(object):
     logger = logging.getLogger('okbot_chat_view')
     tag_weight = {}
+    w2v_model = {}
     vocab_docfreq_th = 10000
     default_tokenizer = 'jieba'
     ranking_factor = 0.8
@@ -208,21 +211,38 @@ class Chat(object):
                 Chat.tag_weight[jt.name] = {'weight': jt.weight, 'punish': jt.punish_factor}
 
 
+        if not bool(Chat.w2v_model):
+            self.logger.info('loading word2vec model...')
+            Chat.w2v_model = gensim.models.KeyedVectors.load_word2vec_format('w2v/segtag-vec.bin', binary=True, unicode_errors='ignore')
+            self.logger.info('loading completed')
+
+
     def _query_vocab(self, w2v=False):
         
         vocab_name = ['--+--'.join([t.word, t.flag, self.default_tokenizer]) for t in self.tok]
+        vocab_score = {vocab_name: 1.0 for name in vocab_name}
 
         # TODO: merge word2vec model here
         # ===============================
-        if w2v:
-            pass
+        if w2v and bool(Chat.w2v_model):
+            w2v_query = ['{}:{}'.format(word, flag) for word, flag in zip(self.words, self.flags) if flag[0] in ['v', 'n']]
+            w2v_neighbor = Chat.w2v_model.most_similar(positive=w2v_query, topn=min(3, len(w2v_query)))
+
+            w2v_name = ['--+--'.join('{}:{}'.format(w[0], self.default_tokenizer).split(':')) for w in w2v_neighbor]
+            w2v_score = [w[1] for w in w2v_neighbor]
+
+            for name, score in zip(w2v_name, w2v_score):
+                vocab_score[name] = score
+
+            vocab_name.extend(w2v_name)
+
         psql = PsqlQuery()
         qvocab = list(psql.query(self.query_vocab_sql, (tuple(vocab_name),)))
         vschema = psql.schema
 
         _tag_weight = {
-            q[vschema['tag']]: Chat.tag_weight[q[vschema['tag']]]['weight'] 
-            if q[vschema['tag']] in Chat.tag_weight else 1.0 for q in qvocab
+            q[vschema['tag']]: Chat.tag_weight[q[vschema['tag']]]['weight'] * vocab_score[q[vschema['name']]]
+            if q[vschema['tag']] in Chat.tag_weight else vocab_score[q[vschema['name']]] for q in qvocab
         }
         # ===============================
 
@@ -272,23 +292,33 @@ class Chat(object):
     def _ranking_post(self):
         # TODO: add other feature weighting here
         # ======================================
-        idx_ranking = np.asarray(self.similar_score).argsort()[::-1]
+        w_pushcount = 1.0, w_pdate = 2.0, w_similar = 1.5
+        now = self.similar_post[0][self.pschema['publish_date']].timestamp()
+        score = []
+        for i, post in enumerate(self.similar_post):
+            s = w_pushcount * len(post[self.pschema['push']].split('\n'))
+              + w_pdate * post[self.pschema['publish_date']].timestamp() / now
+              + w_similar * self.similar_score[i]
+
+            score.append(s)
+
+        idx_ranking = np.asarray(score).argsort()[::-1]
         top_post = []
         top_score = []
-        max_score = self.similar_score[idx_ranking[0]]
+        max_score = score[idx_ranking[0]]
         for m, idx in enumerate(idx_ranking):
-            if (self.similar_score[idx] / max_score) < self.ranking_factor or m > self.max_top_post_num:
+            if (score[idx] / max_score) < self.ranking_factor or m > self.max_top_post_num:
                 break
             else:
                 top_post.append(self.similar_post[idx])
-                top_score.append(self.similar_score[idx])
+                top_score.append(score[idx])
         # ======================================
 
         self.top_post = top_post
         self.post_score = top_score
 
         for p, s in zip(top_post, top_score):
-            print(p[self.pschema['tokenized']], p[self.pschema['url']], s)
+            logger.info('[{:.2f}]{} {}'.format(s, p[self.pschema['tokenized']], p[self.pschema['url']]))
 
 
     def _clean_push(self):
@@ -342,18 +372,29 @@ class Chat(object):
     def _ranking_push(self):
         # TODO: ranking push
         # ==================
+        idx_weight, len_weight = 2.0, 1.0
+
         push = []
         for pool in self.push_pool:
             push.extend(pool['push'])
 
-        final_push = push[random.randint(0, len(push)-1)]
+        score = []
+        for i, p in enumerate(push):
+            score.append( idx_weight / (1 + i) - len_weight * len(p))
+
+        idx_ranking = np.asarray(score).argsort()[::-1]
+
+        top_push = [push[idx] for idx in idx_ranking]
+        push_num = len(top_push) - 1
+        final_push = top_push[int(min(push_num, push_num * abs(np.random.normal(0,1) / 4.0)))]
+
         # ==================
 
         return final_push
 
     def retrieve(self):
         try:
-            self._query_vocab()
+            self._query_vocab(w2v=True)
             self._query_post()
             self._cal_similarity()
             self._ranking_post()
@@ -362,9 +403,14 @@ class Chat(object):
         except Exception as e:
             default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
             push = default_reply[random.randint(0, len(default_reply)-1)]
+            self.logger.error(e)
             self.logger.warning('Query failed: {}'.format(self.query))
 
         return push
+
+
+
+
 
 class MessengerBot(Chat):
     pass
@@ -372,9 +418,5 @@ class MessengerBot(Chat):
 
 class LineBot(Chat):
     pass
-
-
-
-
 
 
