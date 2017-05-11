@@ -11,10 +11,10 @@ import json
 import requests
 import os
 import time
-import random 
+import random
 import jieba.posseg as pseg
 import logging
-from utils import (PsqlQuery, Tokenizer, 
+from utils import (PsqlQuery, Tokenizer,
         MessengerBot, LineBot, tfidf_jaccard_similarity)
 
 
@@ -25,8 +25,6 @@ chformatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefm
 ch.setLevel(logging.INFO)
 ch.setFormatter(chformatter)
 logger.addHandler(ch)
-
-
 
 
 line_bot_api = LineBotApi(os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -44,7 +42,6 @@ GRAPH_API_URL = 'https://graph.facebook.com/v2.6/me/messages'
 def home(request):
     response = TemplateResponse(request, 'privacypolicy.html', {})
     return response
-
 
 
 def graph_api_post(f):
@@ -66,7 +63,7 @@ def graph_api_post(f):
 
     return graph_api_post_
 
-        
+
 @csrf_exempt
 def line_webhook(request):
     if request.method == 'POST':
@@ -89,14 +86,14 @@ def line_webhook(request):
                         logger.info('reply message: query: {}, reply: {}'.format(query, reply))
                         line_bot_api.reply_message(
                             event.reply_token,
-                            _message_obj(reply) 
+                            _message_obj(reply)
                         )
                     except Exception as e:
                         logger.error('okbot.chat_app.line_webhook, message: {}'.format(e))
 
         return HttpResponse()
     else:
-        return HttpResponseBadRequest()    
+        return HttpResponseBadRequest()
 
 
 @csrf_exempt
@@ -139,6 +136,7 @@ def send_seen(sender_id):
     })
     return data, 'send mark seen.'
 
+
 @graph_api_post
 def handle_messenger(sender_id, text='哈哈'):
     query = text
@@ -153,7 +151,7 @@ def handle_messenger(sender_id, text='哈哈'):
     })
     return data, 'reply message: query: {}, reply: {}'.format(query, reply)
 
-    
+
 @graph_api_post
 def send_typing_bubble(sender_id, onoff=False):
     if onoff:
@@ -180,13 +178,7 @@ def _message_obj(reply):
         else:
             match = reply
         imgur_url = re.sub('http', 'https', match)
-        return ImageSendMessage(
-                original_content_url=imgur_url,
-                preview_image_url=imgur_url
-            )
+        return ImageSendMessage(original_content_url=imgur_url,
+                                preview_image_url=imgur_url)
     else:
         return TextSendMessage(text=reply)
-
-
-
-
