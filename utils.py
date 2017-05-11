@@ -9,7 +9,16 @@ import json
 import logging
 import gensim
 
+import django
+os.environ.setdefault(
+    "DJANGO_SETTINGS_MODULE",
+    "okbot.settings"
+)
+django.setup()
+
 from chat_app.models import JiebaTagWeight
+
+
 
 class PsqlAbstract(object):
     DB_USER = os.environ['OKBOT_DB_USER']
@@ -178,8 +187,8 @@ class Chat(object):
     w2v_model = {}
     vocab_docfreq_th = 10000
     default_tokenizer = 'jieba'
-    ranking_factor = 0.8
-    max_query_post_num = 15000
+    ranking_factor = 0.9
+    max_query_post_num = 50000
     max_top_post_num = 5
 
     query_vocab_sql = '''
@@ -191,7 +200,7 @@ class Chat(object):
     '''
     query_post_sql = '''
         SELECT tokenized, grammar, push, url, publish_date
-        FROM ingest_app_post WHERE id IN %s
+        FROM ingest_app_post WHERE id IN %s AND spider != 'mentalk'
         ORDER BY publish_date DESC;
     '''
 
@@ -218,38 +227,39 @@ class Chat(object):
 
 
     def _query_vocab(self, w2v=False):
-        
         vocab_name = ['--+--'.join([t.word, t.flag, self.default_tokenizer]) for t in self.tok]
-        vocab_score = {vocab_name: 1.0 for name in vocab_name}
+        vocab_score = {name: 1.0 for name in vocab_name}
 
         # TODO: merge word2vec model here
         # ===============================
         if w2v and bool(Chat.w2v_model):
-            w2v_query = ['{}:{}'.format(word, flag) for word, flag in zip(self.words, self.flags) if flag[0] in ['v', 'n']]
-            w2v_neighbor = Chat.w2v_model.most_similar(positive=w2v_query, topn=min(3, len(w2v_query)))
+            try:
+                w2v_query = ['{}:{}'.format(word, flag) for word, flag in zip(self.words, self.flags) if flag[0] in ['v', 'n'] or flag == 'eng']
+                if bool(w2v_query):
+                    w2v_neighbor = Chat.w2v_model.most_similar(positive=w2v_query, topn=min(3, len(w2v_query)))
 
-            w2v_name = ['--+--'.join('{}:{}'.format(w[0], self.default_tokenizer).split(':')) for w in w2v_neighbor]
-            w2v_score = [w[1] for w in w2v_neighbor]
+                    w2v_name = ['--+--'.join('{}:{}'.format(w[0], self.default_tokenizer).split(':')) for w in w2v_neighbor]
+                    w2v_score = [w[1] for w in w2v_neighbor]
 
-            for name, score in zip(w2v_name, w2v_score):
-                vocab_score[name] = score
+                    for name, score in zip(w2v_name, w2v_score):
+                        vocab_score[name] = score
 
-            vocab_name.extend(w2v_name)
+                    vocab_name.extend(w2v_name)
+            except: pass
 
         psql = PsqlQuery()
         qvocab = list(psql.query(self.query_vocab_sql, (tuple(vocab_name),)))
-        vschema = psql.schema
 
+        vschema = psql.schema
         _tag_weight = {
-            q[vschema['tag']]: Chat.tag_weight[q[vschema['tag']]]['weight'] * vocab_score[q[vschema['name']]]
-            if q[vschema['tag']] in Chat.tag_weight else vocab_score[q[vschema['name']]] for q in qvocab
+            q[vschema['tag']]: Chat.tag_weight[q[vschema['tag']]]['weight']
+            if q[vschema['tag']] in Chat.tag_weight else 1.0 for q in qvocab
         }
         # ===============================
-
         self.vocab = [
             {
                 'word': ':'.join([q[vschema['word']], q[vschema['tag']]]),
-                'termweight': _tag_weight[q[vschema['tag']]], 
+                'termweight': _tag_weight[q[vschema['tag']]] * vocab_score[q[vschema['name']]], 
                 'docfreq': q[vschema['doc_freq']]
             } for q in qvocab
         ]
@@ -292,16 +302,15 @@ class Chat(object):
     def _ranking_post(self):
         # TODO: add other feature weighting here
         # ======================================
-        w_pushcount = 1.0, w_pdate = 2.0, w_similar = 1.5
+        w_pushcount = 0.2; w_pdate = 0.4; w_similar = 5.0
         now = self.similar_post[0][self.pschema['publish_date']].timestamp()
         score = []
         for i, post in enumerate(self.similar_post):
-            s = w_pushcount * len(post[self.pschema['push']].split('\n'))
-              + w_pdate * post[self.pschema['publish_date']].timestamp() / now
+            s = w_pushcount * len(post[self.pschema['push']].split('\n')) \
+              + w_pdate * post[self.pschema['publish_date']].timestamp() / now \
               + w_similar * self.similar_score[i]
 
             score.append(s)
-
         idx_ranking = np.asarray(score).argsort()[::-1]
         top_post = []
         top_score = []
@@ -313,12 +322,11 @@ class Chat(object):
                 top_post.append(self.similar_post[idx])
                 top_score.append(score[idx])
         # ======================================
-
         self.top_post = top_post
         self.post_score = top_score
 
         for p, s in zip(top_post, top_score):
-            logger.info('[{:.2f}]{} {}'.format(s, p[self.pschema['tokenized']], p[self.pschema['url']]))
+            self.logger.info('[{:.2f}]{} {}'.format(s, p[self.pschema['tokenized']], p[self.pschema['url']]))
 
 
     def _clean_push(self):
@@ -385,8 +393,14 @@ class Chat(object):
         idx_ranking = np.asarray(score).argsort()[::-1]
 
         top_push = [push[idx] for idx in idx_ranking]
-        push_num = len(top_push) - 1
-        final_push = top_push[int(min(push_num, push_num * abs(np.random.normal(0,1) / 4.0)))]
+        #for p in top_push:
+        #    self.logger.info(p)
+
+        push_num = len(top_push)
+        centre = push_num >> 1
+        pick = centre + centre * np.random.normal(0, 1) / 2.0
+        self.logger.info('len: {}, centre: {}, pick: {}'.format(push_num, centre, pick))
+        final_push = top_push[int(min(push_num - 1, max(0, pick)))]
 
         # ==================
 
