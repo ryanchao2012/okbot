@@ -3,7 +3,9 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
 from linebot import LineBotApi, WebhookParser
 from linebot.exceptions import InvalidSignatureError, LineBotApiError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage
+from linebot.models import (MessageEvent, TextMessage, TextSendMessage,
+        ImageSendMessage, FollowEvent, UnfollowEvent, LeaveEvent, JoinEvent,
+        SourceUser, SourceGroup, SourceRoom)
 from django.template.response import TemplateResponse
 
 import re
@@ -83,13 +85,37 @@ def line_webhook(request):
                     try:
                         query = event.message.text
                         reply = LineBot(query).retrieve()
-                        logger.info('reply message: query: {}, reply: {}'.format(query, reply))
+                        utype, uid = _user_id(event.source)
+                        if query == '三杯熊滾' and utype != 'user':
+                            _leave(uid)
+                            logger.info('leaving: utype: {}, uid: {}, query: {}'.format(utype, uid, query))
                         line_bot_api.reply_message(
                             event.reply_token,
                             _message_obj(reply)
                         )
-                    except Exception as e:
-                        logger.error('okbot.chat_app.line_webhook, message: {}'.format(e))
+                        logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+                    except Exception as err:
+                        logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
+            elif isinstance(event, FollowEvent) or isinstance(event, JoinEvent):
+                try:
+                    query = '<FollowEvent or JoinEvent>'
+                    reply = '免責聲明：都是they的錯'
+                    utype, uid = _user_id(event.source)
+                    line_bot_api.reply_message(event.reply_token,
+                                               TextSendMessage(text=reply))
+                    logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+                except Exception as err:
+                    logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
+            elif isinstance(event, UnfollowEvent) or isinstance(event, LeaveEvent):
+                try:
+                    query = '<UnfollowEvent or LeaveEvent>'
+                    reply = '你會後悔'
+                    utype, uid = _user_id(event.source)
+                    line_bot_api.reply_message(event.reply_token,
+                                               TextSendMessage(text=reply))
+                    logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+                except Exception as err:
+                    logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
 
         return HttpResponse()
     else:
@@ -182,3 +208,23 @@ def _message_obj(reply):
                                 preview_image_url=imgur_url)
     else:
         return TextSendMessage(text=reply)
+
+
+def _user_id(source):
+    if isinstance(source, SourceUser):
+        utype = 'user'
+        uid = source.userId
+    elif isinstance(source, SourceGroup):
+        utype = 'group'
+        uid = source.groupId
+    elif isinstance(source, SourceRoom):
+        utype = 'room'
+        uid = source.roomId
+    return utype, uid
+
+
+def _leave(uid):
+    try:
+        line_bot_api.leave_room(uid)
+    except LineBotApiError as err:
+        logger.error('okbot.chat_app.leave, message: {}'.format(err))
