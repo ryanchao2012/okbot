@@ -3,7 +3,9 @@ from django.http import HttpResponse, HttpResponseForbidden
 from django.views.decorators.csrf import csrf_exempt
 from linebot import LineBotApi, WebhookParser
 from linebot.exceptions import InvalidSignatureError, LineBotApiError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage
+from linebot.models import (MessageEvent, TextMessage, TextSendMessage,
+        ImageSendMessage, FollowEvent, UnfollowEvent, LeaveEvent, JoinEvent,
+        SourceUser, SourceGroup, SourceRoom)
 from django.template.response import TemplateResponse
 
 import re
@@ -11,10 +13,10 @@ import json
 import requests
 import os
 import time
-import random 
+import random
 import jieba.posseg as pseg
 import logging
-from utils import (PsqlQuery, Tokenizer, 
+from utils import (PsqlQuery, Tokenizer,
         MessengerBot, LineBot, tfidf_jaccard_similarity)
 
 
@@ -25,8 +27,6 @@ chformatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefm
 ch.setLevel(logging.INFO)
 ch.setFormatter(chformatter)
 logger.addHandler(ch)
-
-
 
 
 line_bot_api = LineBotApi(os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
@@ -44,7 +44,6 @@ GRAPH_API_URL = 'https://graph.facebook.com/v2.6/me/messages'
 def home(request):
     response = TemplateResponse(request, 'privacypolicy.html', {})
     return response
-
 
 
 def graph_api_post(f):
@@ -66,7 +65,7 @@ def graph_api_post(f):
 
     return graph_api_post_
 
-        
+
 @csrf_exempt
 def line_webhook(request):
     if request.method == 'POST':
@@ -86,17 +85,41 @@ def line_webhook(request):
                     try:
                         query = event.message.text
                         reply = LineBot(query).retrieve()
-                        logger.info('reply message: query: {}, reply: {}'.format(query, reply))
+                        utype, uid = _user_id(event.source)
+                        if query == '三杯熊滾' and utype != 'user':
+                            _leave(uid)
+                            logger.info('leaving: utype: {}, uid: {}, query: {}'.format(utype, uid, query))
                         line_bot_api.reply_message(
                             event.reply_token,
-                            _message_obj(reply) 
+                            _message_obj(reply)
                         )
-                    except Exception as e:
-                        logger.error('okbot.chat_app.line_webhook, message: {}'.format(e))
+                        logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+                    except Exception as err:
+                        logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
+            elif isinstance(event, FollowEvent) or isinstance(event, JoinEvent):
+                try:
+                    query = '<FollowEvent or JoinEvent>'
+                    reply = '免責聲明：都是they的錯'
+                    utype, uid = _user_id(event.source)
+                    line_bot_api.reply_message(event.reply_token,
+                                               TextSendMessage(text=reply))
+                    logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+                except Exception as err:
+                    logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
+            elif isinstance(event, UnfollowEvent) or isinstance(event, LeaveEvent):
+                try:
+                    query = '<UnfollowEvent or LeaveEvent>'
+                    reply = '你會後悔'
+                    utype, uid = _user_id(event.source)
+                    line_bot_api.reply_message(event.reply_token,
+                                               TextSendMessage(text=reply))
+                    logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+                except Exception as err:
+                    logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
 
         return HttpResponse()
     else:
-        return HttpResponseBadRequest()    
+        return HttpResponseBadRequest()
 
 
 @csrf_exempt
@@ -139,6 +162,7 @@ def send_seen(sender_id):
     })
     return data, 'send mark seen.'
 
+
 @graph_api_post
 def handle_messenger(sender_id, text='哈哈'):
     query = text
@@ -153,7 +177,7 @@ def handle_messenger(sender_id, text='哈哈'):
     })
     return data, 'reply message: query: {}, reply: {}'.format(query, reply)
 
-    
+
 @graph_api_post
 def send_typing_bubble(sender_id, onoff=False):
     if onoff:
@@ -180,13 +204,27 @@ def _message_obj(reply):
         else:
             match = reply
         imgur_url = re.sub('http', 'https', match)
-        return ImageSendMessage(
-                original_content_url=imgur_url,
-                preview_image_url=imgur_url
-            )
+        return ImageSendMessage(original_content_url=imgur_url,
+                                preview_image_url=imgur_url)
     else:
         return TextSendMessage(text=reply)
 
 
+def _user_id(source):
+    if isinstance(source, SourceUser):
+        utype = 'user'
+        uid = source.userId
+    elif isinstance(source, SourceGroup):
+        utype = 'group'
+        uid = source.groupId
+    elif isinstance(source, SourceRoom):
+        utype = 'room'
+        uid = source.roomId
+    return utype, uid
 
 
+def _leave(uid):
+    try:
+        line_bot_api.leave_room(uid)
+    except LineBotApiError as err:
+        logger.error('okbot.chat_app.leave, message: {}'.format(err))
