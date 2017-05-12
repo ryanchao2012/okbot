@@ -31,6 +31,12 @@ logger.addHandler(ch)
 
 line_bot_api = LineBotApi(os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
 line_webhook_parser = WebhookParser(os.environ['LINE_CHANNEL_SECRET'])
+DISCLAIMER = (
+    "免責聲明：\n"
+    "三杯熊的所有回應皆以ptt上的內容為素材，若您因為惡意連結或爭議性內容受到任何損失，\n"
+    "秉持著都是they的錯的精神，三杯熊將不負賠償責任。\n"
+    "若您有任何疑慮，請直接像三杯熊反應，但是我聽到後就不必再大聲了。\n"
+    "若您還是想與三杯熊聊天，請對著手機大聲汪汪汪叫三聲，即可開始用文字訊息聊天。")
 
 
 OKBOT_PAGE_ACCESS_KEY=os.environ['OKBOT_PAGE_ACCESS_KEY']
@@ -103,10 +109,11 @@ def line_webhook(request):
             elif isinstance(event, FollowEvent) or isinstance(event, JoinEvent):
                 try:
                     query = '<FollowEvent or JoinEvent>'
-                    reply = '免責聲明：都是they的錯'
+                    reply = DISCLAIMER
                     utype, uid = _user_id(event.source)
-                    line_bot_api.reply_message(event.reply_token,
-                                               TextSendMessage(text=reply))
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TextSendMessage(text=reply))
                     logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
                 except Exception as err:
                     logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
