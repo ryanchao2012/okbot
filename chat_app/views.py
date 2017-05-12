@@ -213,18 +213,18 @@ def _message_obj(reply):
 def _user_id(source):
     if isinstance(source, SourceUser):
         utype = 'user'
-        uid = source.userId
+        uid = source.user_id
     elif isinstance(source, SourceGroup):
         utype = 'group'
-        uid = source.groupId
+        uid = source.group_id
     elif isinstance(source, SourceRoom):
         utype = 'room'
-        uid = source.roomId
+        uid = source.room_id
     return utype, uid
 
 
 def _leave(uid):
     try:
-        line_bot_api.leave_room(uid)
+        line_bot_api.leave_group(uid)
     except LineBotApiError as err:
         logger.error('okbot.chat_app.leave, message: {}'.format(err))
