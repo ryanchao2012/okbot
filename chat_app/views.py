@@ -90,7 +90,6 @@ def line_webhook(request):
                 if isinstance(event.message, TextMessage):
                     try:
                         query = event.message.text
-                        reply = LineBot(query).retrieve()
                         utype, uid = _user_id(event.source)
                         if query == '三杯熊滾' and utype != 'user':
                             reply = '你會後悔'
@@ -100,6 +99,7 @@ def line_webhook(request):
                             _leave(utype, uid)
                             logger.info('leaving: utype: {}, uid: {}, query: {}'.format(utype, uid, query))
                         else:
+                            reply = LineBot(query).retrieve()
                             line_bot_api.reply_message(
                                 event.reply_token,
                                 _message_obj(reply))
@@ -121,7 +121,7 @@ def line_webhook(request):
                 try:
                     query = '<UnfollowEvent or LeaveEvent>'
                     utype, uid = _user_id(event.source)
-                    logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+                    logger.info('leave or unfollow: utype: {}, uid: {}, query: {}'.format(utype, uid, query))
                 except Exception as err:
                     logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
 
