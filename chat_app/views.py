@@ -99,11 +99,11 @@ def line_webhook(request):
                                 TextSendMessage(text=reply))
                             _leave(utype, uid)
                             logger.info('leaving: utype: {}, uid: {}, query: {}'.format(utype, uid, query))
-
-                        line_bot_api.reply_message(
-                            event.reply_token,
-                            _message_obj(reply))
-                        logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+                        else:
+                            line_bot_api.reply_message(
+                                event.reply_token,
+                                _message_obj(reply))
+                            logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
                     except Exception as err:
                         logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
             elif isinstance(event, FollowEvent) or isinstance(event, JoinEvent):
