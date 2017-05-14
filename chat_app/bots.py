@@ -66,7 +66,7 @@ class Chat(object):
         self.uid = uid
         self.idtype = idtype
         self.event_time = timezone.now()
-        # self.query, action = self._pre_rulecheck(query)
+        self.query = query
         self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
 
         if not bool(Chat.tag_weight):
