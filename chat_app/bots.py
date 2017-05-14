@@ -22,21 +22,33 @@ class Chat(object):
     w2v_model = {}
     vocab_docfreq_th = 10000
     default_tokenizer = 'jieba'
-    ranking_factor = 0.9
+    ranking_factor = 0.8
     max_query_post_num = 50000
     max_top_post_num = 5
 
-    query_chatcache_sql = '''
-        SELECT * FROM chat_app_chatcache
+    query_chatuser_sql = '''
+        SELECT * FROM chat_app_chatuser
         WHERE uid = %(uid)s AND platform = %(platform)s;
     '''
 
+    upsert_chatuser_sql = '''
+        INSERT INTO chat_app_chatuser(platform, uid, idtype, active, state)
+        SELECT %(platform)s, %(uid)s, %(idtype)s, %(active)s, %(state)s
+        ON CONFLICT (platform, uid) DO
+        UPDATE SET 
+        active = EXCLUDED.active,
+        state = EXCLUDED.state;
+    '''
+
+    query_chatcache_sql = '''
+        SELECT * FROM chat_app_chatcache WHERE user_id = %s;
+    '''
+
     upsert_chatcache_sql = '''
-        INSERT INTO chat_app_chatcache(platform, uid, idtype, query,
+        INSERT INTO chat_app_chatcache(user_id, query,
                                        keyword, reply, time)
-        SELECT %(platform)s, %(uid)s, %(idtype)s, %(query)s,
-               %(keyword)s, %(reply)s, %(time)s
-        ON CONFLICT (uid) DO
+        SELECT %(user_id)s, %(query)s, %(keyword)s, %(reply)s, %(time)s
+        ON CONFLICT (user_id) DO
         UPDATE SET
             query = EXCLUDED.query,
             keyword = EXCLUDED.keyword,
@@ -58,9 +70,9 @@ class Chat(object):
         ORDER BY publish_date DESC;
     '''
 
-    def _pre_rulecheck(self, raw):
-        refined, action = raw, 0
-        return refined, action
+#    def _pre_rulecheck(self, raw):
+#        refined, action = raw, 0
+#        return refined, action
 
     def __init__(self, query, platform, uid, idtype='', tokenizer='jieba'):
         self.platform = platform
@@ -68,6 +80,9 @@ class Chat(object):
         self.idtype = idtype
         self.event_time = timezone.now()
         self.query = query
+        self.cache = None
+        self.user = None
+        self.uschema = {}
         self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
 
         if not bool(Chat.tag_weight):
@@ -80,31 +95,40 @@ class Chat(object):
             Chat.w2v_model = gensim.models.KeyedVectors.load_word2vec_format('w2v/segtag-vec.bin', binary=True, unicode_errors='ignore')
             self.logger.info('loading completed')
 
-    def _query_cache(self, uid, platform):
+    def _get_user(self):
+        is_exist, is_active = False, False
+        psql = PsqlQuery()
+        user_ = list(psql.query(self.query_chatuser_sql, {'uid': self.uid, 'platform': self.platform}))
+        if bool(user_):
+            self.user = user_[0]
+            self.uschema = psql.schema
+
+    def _query_cache(self):
         psql = PsqlQuery()
         try:
-            cache = list(psql.query(self.query_vocab_sql, {'uid': self.uid, 'platform': self.platform}))
-            self.logger.info(cache)
+            cache = list(psql.query(self.query_chatcache_sql, (self.user_pk,)))
+            self.logger.info('@@@@@@@@{}'.format(cache))
         except Exception as e:
             self.logger.warning(e)
 
-# SELECT %(platform)s, %(uid)s, %(idtype)s, %(query)s,
-#                %(keyword)s, %(reply)s, %(time)s
     def _upsert_cache(self, push):
         psql = PsqlQuery()
         data = {
             'platform': self.platform,
             'uid': self.uid,
             'idtype': self.idtype,
-            'query': self.query,
-            'keyword': self.keyword,
-            'reply': push,
-            'time': self.event_time
+            'active': False,
+            'state': 0
+#            'query': self.query,
+#            'keyword': self.keyword,
+#            'reply': push,
+#            'time': self.event_time
         }
         try:
-            psql.upsert(self.upsert_chatcache_sql, data)
+            r = psql.upsert(self.upsert_chatuser_sql, data)
+            print('@@@@@@@@@@@@', r)
         except Exception as e:
-            self.logger.warning('upsert cache failed: {}'.format(e))
+            self.logger.warning('upsert chatuser failed: {}'.format(e))
 
     def _query_vocab(self, w2v=False):
         vocab_name = ['--+--'.join([t.word, t.flag, self.default_tokenizer]) for t in self.tok]
@@ -161,7 +185,7 @@ class Chat(object):
         psql = PsqlQuery()
         self.allpost = psql.query(self.query_post_sql, (tuple(query_pid),))
         self.pschema = psql.schema
-
+        
     def _cal_similarity(self, scorer=tfidf_jaccard_similarity):
         post_buffer = []
         score_buffer = []
@@ -283,23 +307,29 @@ class Chat(object):
         return final_push
 
     def retrieve(self):
-        try:
-            self._query_vocab(w2v=True)
-            self._query_post()
-            self._cal_similarity()
-            self._ranking_post()
-            self._clean_push()
-            push = self._ranking_push()
+        self._get_user()
+        if bool(self.user):
+            if self.user[self.uschema['active']]:
+                try:
+                    self._query_vocab(w2v=True)
+                    self._query_post()
+                    self._cal_similarity()
+                    self._ranking_post()
+                    self._clean_push()
+                    push = self._ranking_push()
 
-        except Exception as e:
-            default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
-            push = default_reply[random.randint(0, len(default_reply) - 1)]
-            self.logger.error(e)
-            self.logger.warning('Query failed: {}'.format(self.query))
-        finally:
-            self._upsert_cache(push)
+                except Exception as e:
+                    default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
+                    push = default_reply[random.randint(0, len(default_reply) - 1)]
+                    self.logger.error(e)
+                    self.logger.warning('Query failed: {}'.format(self.query))
+                finally:
+                    self._upsert_cache(push)
 
-        return push
+                return push
+
+            else:
+                pass
 
 
 class MessengerBot(Chat):

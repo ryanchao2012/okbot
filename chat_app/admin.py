@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from .models import (
-    ChatCache, ChatRule, JiebaTagWeight
+    ChatUser, ChatRule, JiebaTagWeight
 )
 # Register your models here.
 
@@ -11,8 +11,9 @@ class JiebaTagWeightAdmin(admin.ModelAdmin):
     list_editable = ('description', 'weight', 'punish_factor')
 
 
-class ChatCacheAdmin(admin.ModelAdmin):
-    list_display = ('platform', 'uid', 'get_query', 'get_reply', 'time')
+class ChatUserAdmin(admin.ModelAdmin):
+    list_display = ('uid', 'platform', 'idtype', 'active', 'state')
+    list_editable = ('active', 'state')
 
     def has_add_permission(self, request):
         return False
@@ -24,5 +25,5 @@ class ChatRuleAdmin(admin.ModelAdmin):
 
 
 admin.site.register(JiebaTagWeight, JiebaTagWeightAdmin)
-admin.site.register(ChatCache, ChatCacheAdmin)
+admin.site.register(ChatUser, ChatUserAdmin)
 admin.site.register(ChatRule, ChatRuleAdmin)

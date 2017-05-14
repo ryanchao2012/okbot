@@ -146,9 +146,6 @@ def fb_webhook(request):
         except Exception as e:
             logger.warning(e)
             return HttpResponse()
-        print('==========')
-        print(incoming)
-        print('==========')
         for entry in incoming['entry']:
             for message_evt in entry['messaging']:
                 sender_id = message_evt.get('sender').get('id')
@@ -177,7 +174,7 @@ def send_seen(sender_id):
 @graph_api_post
 def handle_messenger(sender_id, text='哈哈'):
     query = text
-    reply = MessengerBot(query, 'messenger', '1234567').retrieve()
+    reply = MessengerBot(query, 'messenger', sender_id).retrieve()
     data = json.dumps({
         "recipient": {
             "id": sender_id

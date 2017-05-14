@@ -35,9 +35,10 @@ class ChatRule(models.Model):
 
 
 class ChatCache(models.Model):
-    platform = models.CharField(max_length=31)
-    uid = models.CharField(max_length=127, unique=True)
-    idtype = models.CharField(max_length=31, blank=True, null=True)
+#    platform = models.CharField(max_length=31)
+#    uid = models.CharField(max_length=127, unique=True)
+#    idtype = models.CharField(max_length=31, blank=True, null=True)
+    user = models.OneToOneField('ChatUser', on_delete=models.SET_NULL, null=True)
     query = models.TextField()
     keyword = models.TextField(blank=True, null=True)
     reply = models.TextField()
@@ -49,5 +50,17 @@ class ChatCache(models.Model):
     def get_reply(self):
         return self.reply[:20]
 
+class ChatUser(models.Model):
+    platform = models.CharField(max_length=31)
+    uid = models.CharField(max_length=127)
+    idtype = models.CharField(max_length=31, blank=True, null=True)
+    active = models.BooleanField(default=False)
+    state = models.IntegerField(default=0)
 
+
+    class Meta:
+        unique_together = ('platform', 'uid')
+
+    def __str__(self):
+        return '<{}>{}'.format(self.platform, self.uid)
 # class ChatTree(model.Model):
