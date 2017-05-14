@@ -51,14 +51,14 @@ class PsqlQuery(PsqlAbstract):
         super(self.__class__, self).__init__(username=username, db=db, password=password)
         self.schema = {}
 
-    def insert_with_col_return(self, q, data=None, col='id'):
-        return self._insert_with_col_return(query_=q, data=data, col=col)
+    def insert_with_col_return(self, q, data=None):
+        return self._insert_with_col_return(query_=q, data=data)
 
     @PsqlAbstract.session()
-    def _insert_with_col_return(self, connect, cursor, query_=None, data=None, col='id'):
+    def _insert_with_col_return(self, connect, cursor, query_=None, data=None):
         self._get_schema(query_=query_, data=data)
         cursor.execute(query_, data)
-        ret = cursor.fetchone()[self.schema[col]]
+        ret = cursor.fetchone()
         connect.commit()
         return ret
 

@@ -13,13 +13,18 @@ from utils import (
     tfidf_jaccard_similarity
 )
 
-from .models import JiebaTagWeight
+from .models import ChatRule, JiebaTagWeight
 
 
 class Chat(object):
     logger = logging.getLogger('okbot_chat_view')
     tag_weight = {}
-    w2v_model = {}
+
+    w2v_model = None
+    disclaimer = None
+    activate_key = None
+    activate_response = []
+
     vocab_docfreq_th = 10000
     default_tokenizer = 'jieba'
     ranking_factor = 0.8
@@ -31,13 +36,14 @@ class Chat(object):
         WHERE uid = %(uid)s AND platform = %(platform)s;
     '''
 
-    upsert_chatuser_sql = '''
+    upsert_chatuser_with_return_sql = '''
         INSERT INTO chat_app_chatuser(platform, uid, idtype, active, state)
         SELECT %(platform)s, %(uid)s, %(idtype)s, %(active)s, %(state)s
         ON CONFLICT (platform, uid) DO
-        UPDATE SET 
-        active = EXCLUDED.active,
-        state = EXCLUDED.state;
+        UPDATE SET
+        active = chat_app_chatuser.active OR EXCLUDED.active,
+        state = EXCLUDED.state
+        RETURNING * ;
     '''
 
     query_chatcache_sql = '''
@@ -45,8 +51,7 @@ class Chat(object):
     '''
 
     upsert_chatcache_sql = '''
-        INSERT INTO chat_app_chatcache(user_id, query,
-                                       keyword, reply, time)
+        INSERT INTO chat_app_chatcache(user_id, query, keyword, reply, time)
         SELECT %(user_id)s, %(query)s, %(keyword)s, %(reply)s, %(time)s
         ON CONFLICT (user_id) DO
         UPDATE SET
@@ -80,10 +85,12 @@ class Chat(object):
         self.idtype = idtype
         self.event_time = timezone.now()
         self.query = query
+        self.user, self.uschema = self._upsert_user()
+
         self.cache = None
-        self.user = None
-        self.uschema = {}
-        self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
+
+        if self.user[self.uschema['active']]:
+            self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
 
         if not bool(Chat.tag_weight):
             jtag = JiebaTagWeight.objects.all()
@@ -95,40 +102,66 @@ class Chat(object):
             Chat.w2v_model = gensim.models.KeyedVectors.load_word2vec_format('w2v/segtag-vec.bin', binary=True, unicode_errors='ignore')
             self.logger.info('loading completed')
 
+        if not bool(Chat.disclaimer):
+            disclaimer = ChatRule.objects.get(rtype='disclaimer')
+            Chat.disclaimer = disclaimer.response
+
+        if not (bool(Chat.activate_key) and bool(Chat.activate_response)):
+            activate = ChatRule.objects.get(rtype='activate')
+            Chat.activate_key = activate.keyword
+            Chat.activate_response = activate.response.split('\n')
+
     def _get_user(self):
-        is_exist, is_active = False, False
+        user, schema = None, {}
         psql = PsqlQuery()
         user_ = list(psql.query(self.query_chatuser_sql, {'uid': self.uid, 'platform': self.platform}))
         if bool(user_):
-            self.user = user_[0]
-            self.uschema = psql.schema
+            user = user_[0]
+            schema = psql.schema
 
-    def _query_cache(self):
-        psql = PsqlQuery()
-        try:
-            cache = list(psql.query(self.query_chatcache_sql, (self.user_pk,)))
-            self.logger.info('@@@@@@@@{}'.format(cache))
-        except Exception as e:
-            self.logger.warning(e)
+        return user, schema
 
-    def _upsert_cache(self, push):
+    def _upsert_user(self, active=False, state=0):
+        user, schema = None, {}
         psql = PsqlQuery()
         data = {
             'platform': self.platform,
             'uid': self.uid,
             'idtype': self.idtype,
-            'active': False,
-            'state': 0
-#            'query': self.query,
-#            'keyword': self.keyword,
-#            'reply': push,
-#            'time': self.event_time
+            'active': active,
+            'state': state
         }
         try:
-            r = psql.upsert(self.upsert_chatuser_sql, data)
-            print('@@@@@@@@@@@@', r)
+            user = psql.insert_with_col_return(self.upsert_chatuser_with_return_sql, data)
+            schema = psql.schema
         except Exception as e:
-            self.logger.warning('upsert chatuser failed: {}'.format(e))
+            self.logger.error('Upsert ChatUser failed: {}'.format(e))
+
+        return user, schema
+
+    # def _query_cache(self):
+    #     psql = PsqlQuery()
+    #     try:
+    #         cache = list(psql.query(self.query_chatcache_sql, (self.user_pk,)))
+    #         self.logger.info('@@@@@@@@{}'.format(cache))
+    #     except Exception as e:
+    #         self.logger.warning(e)
+
+    def _upsert_cache(self, push):
+        if bool(self.user):
+            psql = PsqlQuery()
+            data = {
+                'user_id': self.user[self.uschema['id']],
+                'query': self.query,
+                'keyword': self.keyword,
+                'reply': push,
+                'time': self.event_time
+            }
+
+            try:
+                psql.upsert(self.upsert_chatcache_sql, data)
+            except Exception as e:
+                self.logger.error('Upsert ChatCache failed: {}'.format(e))
 
     def _query_vocab(self, w2v=False):
         vocab_name = ['--+--'.join([t.word, t.flag, self.default_tokenizer]) for t in self.tok]
@@ -185,7 +218,7 @@ class Chat(object):
         psql = PsqlQuery()
         self.allpost = psql.query(self.query_post_sql, (tuple(query_pid),))
         self.pschema = psql.schema
-        
+
     def _cal_similarity(self, scorer=tfidf_jaccard_similarity):
         post_buffer = []
         score_buffer = []
@@ -306,30 +339,37 @@ class Chat(object):
 
         return final_push
 
+    def _chat(self):
+        try:
+            self._query_vocab(w2v=True)
+            self._query_post()
+            self._cal_similarity()
+            self._ranking_post()
+            self._clean_push()
+            push = self._ranking_push()
+
+        except Exception as e:
+            default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
+            push = default_reply[random.randint(0, len(default_reply) - 1)]
+            self.logger.error(e)
+            self.logger.warning('Query failed: {}'.format(self.query))
+        finally:
+            self._upsert_cache(push)
+
+        return push
+
     def retrieve(self):
-        self._get_user()
-        if bool(self.user):
-            if self.user[self.uschema['active']]:
-                try:
-                    self._query_vocab(w2v=True)
-                    self._query_post()
-                    self._cal_similarity()
-                    self._ranking_post()
-                    self._clean_push()
-                    push = self._ranking_push()
-
-                except Exception as e:
-                    default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
-                    push = default_reply[random.randint(0, len(default_reply) - 1)]
-                    self.logger.error(e)
-                    self.logger.warning('Query failed: {}'.format(self.query))
-                finally:
-                    self._upsert_cache(push)
-
-                return push
-
+        if self.user[self.uschema['active']]:
+            reply = self._chat()
+        else:
+            if self.query == Chat.activate_key:
+                self._upsert_user(active=True)
+                l = len(Chat.activate_response)
+                reply = Chat.activate_response[random.randint(0, l - 1)]
             else:
-                pass
+                reply = Chat.disclaimer
+
+        return reply
 
 
 class MessengerBot(Chat):
