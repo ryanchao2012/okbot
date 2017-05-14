@@ -2,6 +2,8 @@ import json
 import logging
 import random
 
+from django.utils import timezone
+
 import gensim
 
 import numpy as np
@@ -24,6 +26,24 @@ class Chat(object):
     max_query_post_num = 50000
     max_top_post_num = 5
 
+    query_chatcache_sql = '''
+        SELECT * FROM chat_app_chatcache
+        WHERE uid = %(uid)s AND platform = %(platform)s;
+    '''
+
+    upsert_chatcache_sql = '''
+        INSERT INTO chat_app_chatcache
+        SELECT %(platform)s, %(uid)s, %(idtype)s, %(query)s,
+               %(keyword)s, %(reply)s, %(time)s
+        ON CONFLICT (uid) DO
+        UPDATE SET
+            query = EXCLUDED.query,
+            keyword = EXCLUDED.keyword,
+            reply = EXCLUDED.reply,
+            time = EXCLUDED.time
+        WHERE platform = EXCLUDED.platform;
+    '''
+
     query_vocab_sql = '''
         SELECT * FROM ingest_app_vocabulary WHERE name IN %s;
     '''
@@ -41,8 +61,12 @@ class Chat(object):
         refined, action = raw, 0
         return refined, action
 
-    def __init__(self, query, tokenizer='jieba'):
-        self.query, action = self._pre_rulecheck(query)
+    def __init__(self, query, platform, uid, idtype='', tokenizer='jieba'):
+        self.platform = platform
+        self.uid = uid
+        self.idtype = idtype
+        self.event_time = timezone.now()
+        # self.query, action = self._pre_rulecheck(query)
         self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
 
         if not bool(Chat.tag_weight):
@@ -54,6 +78,32 @@ class Chat(object):
             self.logger.info('loading word2vec model...')
             Chat.w2v_model = gensim.models.KeyedVectors.load_word2vec_format('w2v/segtag-vec.bin', binary=True, unicode_errors='ignore')
             self.logger.info('loading completed')
+
+    def _query_cache(self, uid, platform):
+        psql = PsqlQuery()
+        try:
+            cache = list(psql.query(self.query_vocab_sql, {'uid': self.uid, 'platform': self.platform}))
+            self.logger.info(cache)
+        except Exception as e:
+            self.logger.warning(e)
+
+# SELECT %(platform)s, %(uid)s, %(idtype)s, %(query)s,
+#                %(keyword)s, %(reply)s, %(time)s
+    def _upsert_cache(self, push):
+        psql = PsqlQuery()
+        data = {
+            'platform': self.platform,
+            'uid': self.uid,
+            'idtype': self.idtype,
+            'query': self.query,
+            'keyword': self.keyword,
+            'reply': push,
+            'time': self.event_time
+        }
+        try:
+            psql.upsert(self.upsert_chatcache_sql, data)
+        except Exception as e:
+            self.logger.warning(e)
 
     def _query_vocab(self, w2v=False):
         vocab_name = ['--+--'.join([t.word, t.flag, self.default_tokenizer]) for t in self.tok]
@@ -101,8 +151,8 @@ class Chat(object):
         ]
 
     def _query_post(self):
-        vocab_json = json.dumps(self.vocab, indent=4, ensure_ascii=False, sort_keys=True)
-        self.logger.info(vocab_json)
+        self.keyword = json.dumps(self.vocab, indent=4, ensure_ascii=False, sort_keys=True)
+        self.logger.info(self.keyword)
 
         query_pid = list(PsqlQuery().query(
             self.query_vocab2post_sql, (tuple(self.vid),))
@@ -239,6 +289,8 @@ class Chat(object):
             self._ranking_post()
             self._clean_push()
             push = self._ranking_push()
+
+            self._upsert_cache(push)
         except Exception as e:
             default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
             push = default_reply[random.randint(0, len(default_reply) - 1)]

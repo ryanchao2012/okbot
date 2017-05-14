@@ -102,7 +102,7 @@ def line_webhook(request):
                             _leave(utype, uid)
                             logger.info('leaving: utype: {}, uid: {}, query: {}'.format(utype, uid, query))
                         else:
-                            reply = LineBot(query).retrieve()
+                            reply = LineBot(query, 'line', uid, utype).retrieve()
                             line_bot_api.reply_message(
                                 event.reply_token,
                                 _message_obj(reply))
@@ -177,7 +177,7 @@ def send_seen(sender_id):
 @graph_api_post
 def handle_messenger(sender_id, text='哈哈'):
     query = text
-    reply = MessengerBot(query).retrieve()
+    reply = MessengerBot(query, 'messenger', '1234567').retrieve()
     data = json.dumps({
         "recipient": {
             "id": sender_id

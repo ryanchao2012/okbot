@@ -14,6 +14,9 @@ class JiebaTagWeightAdmin(admin.ModelAdmin):
 class ChatCacheAdmin(admin.ModelAdmin):
     list_display = ('platform', 'uid', 'get_query', 'get_reply', 'time')
 
+    def has_add_permission(self, request):
+        return False
+
 
 class ChatRuleAdmin(admin.ModelAdmin):
     list_display = ('rtype', 'keyword')

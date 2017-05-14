@@ -36,7 +36,7 @@ class ChatRule(models.Model):
 
 class ChatCache(models.Model):
     platform = models.CharField(max_length=31)
-    uid = models.CharField(max_length=127)
+    uid = models.CharField(max_length=127, unique=True)
     idtype = models.CharField(max_length=31, blank=True, null=True)
     query = models.TextField()
     keyword = models.TextField(blank=True, null=True)
