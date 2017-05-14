@@ -32,7 +32,8 @@ class Chat(object):
     '''
 
     upsert_chatcache_sql = '''
-        INSERT INTO chat_app_chatcache
+        INSERT INTO chat_app_chatcache(platform, uid, idtype, query,
+                                       keyword, reply, time)
         SELECT %(platform)s, %(uid)s, %(idtype)s, %(query)s,
                %(keyword)s, %(reply)s, %(time)s
         ON CONFLICT (uid) DO
@@ -41,7 +42,7 @@ class Chat(object):
             keyword = EXCLUDED.keyword,
             reply = EXCLUDED.reply,
             time = EXCLUDED.time
-        WHERE platform = EXCLUDED.platform;
+        WHERE chat_app_chatcache.platform = EXCLUDED.platform;
     '''
 
     query_vocab_sql = '''
@@ -103,7 +104,7 @@ class Chat(object):
         try:
             psql.upsert(self.upsert_chatcache_sql, data)
         except Exception as e:
-            self.logger.warning(e)
+            self.logger.warning('upsert cache failed: {}'.format(e))
 
     def _query_vocab(self, w2v=False):
         vocab_name = ['--+--'.join([t.word, t.flag, self.default_tokenizer]) for t in self.tok]
@@ -290,12 +291,13 @@ class Chat(object):
             self._clean_push()
             push = self._ranking_push()
 
-            self._upsert_cache(push)
         except Exception as e:
             default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
             push = default_reply[random.randint(0, len(default_reply) - 1)]
             self.logger.error(e)
             self.logger.warning('Query failed: {}'.format(self.query))
+        finally:
+            self._upsert_cache(push)
 
         return push
 
