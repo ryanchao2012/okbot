@@ -1,23 +1,26 @@
-from django.shortcuts import render
+import json
+import logging
+import os
+import re
+
 from django.http import HttpResponse, HttpResponseForbidden
+from django.http.response import HttpResponseBadRequest
+from django.template.response import TemplateResponse
 from django.views.decorators.csrf import csrf_exempt
+
+
+# from django.shortcuts import render
 from linebot import LineBotApi, WebhookParser
 from linebot.exceptions import InvalidSignatureError, LineBotApiError
-from linebot.models import (MessageEvent, TextMessage, TextSendMessage,
-        ImageSendMessage, FollowEvent, UnfollowEvent, LeaveEvent, JoinEvent,
-        SourceUser, SourceGroup, SourceRoom)
-from django.template.response import TemplateResponse
+from linebot.models import (
+    FollowEvent, ImageSendMessage, JoinEvent, LeaveEvent,
+    MessageEvent, SourceGroup, SourceRoom, SourceUser,
+    TextMessage, TextSendMessage, UnfollowEvent,
+)
 
-import re
-import json
 import requests
-import os
-import time
-import random
-import jieba.posseg as pseg
-import logging
-from utils import (PsqlQuery, Tokenizer,
-        MessengerBot, LineBot, tfidf_jaccard_similarity)
+
+from .bots import LineBot, MessengerBot
 
 
 logger = logging.getLogger('okbot_chat_view')
@@ -39,8 +42,8 @@ DISCLAIMER = (
     "若您還是想與三杯熊聊天，請對著手機大聲汪汪汪叫三聲，即可開始用文字訊息聊天。")
 
 
-OKBOT_PAGE_ACCESS_KEY=os.environ['OKBOT_PAGE_ACCESS_KEY']
-OKBOT_VERIFY_TOKEN=os.environ['OKBOT_VERIFY_TOKEN']
+OKBOT_PAGE_ACCESS_KEY = os.environ['OKBOT_PAGE_ACCESS_KEY']
+OKBOT_VERIFY_TOKEN = os.environ['OKBOT_VERIFY_TOKEN']
 
 # Create your views here.
 
