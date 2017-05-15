@@ -8,7 +8,6 @@ from django.http.response import HttpResponseBadRequest
 from django.template.response import TemplateResponse
 from django.views.decorators.csrf import csrf_exempt
 
-
 # from django.shortcuts import render
 from linebot import LineBotApi, WebhookParser
 from linebot.exceptions import InvalidSignatureError, LineBotApiError
@@ -34,12 +33,6 @@ logger.addHandler(ch)
 
 line_bot_api = LineBotApi(os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
 line_webhook_parser = WebhookParser(os.environ['LINE_CHANNEL_SECRET'])
-DISCLAIMER = (
-    "免責聲明：\n"
-    "三杯熊的所有回應皆以ptt上的內容為素材，若您因為惡意連結或爭議性內容受到任何損失，\n"
-    "秉持著都是they的錯的精神，三杯熊將不負賠償責任。\n"
-    "若您有任何疑慮，請直接像三杯熊反應，但是我聽到後就不必再大聲了。\n"
-    "若您還是想與三杯熊聊天，請對著手機大聲汪汪汪叫三聲，即可開始用文字訊息聊天。")
 
 
 OKBOT_PAGE_ACCESS_KEY = os.environ['OKBOT_PAGE_ACCESS_KEY']
@@ -94,14 +87,6 @@ def line_webhook(request):
                     try:
                         query = event.message.text
                         utype, uid = _user_id(event.source)
-#                        if query == '三杯熊滾' and utype != 'user':
-#                            reply = '你會後悔'
-#                            line_bot_api.reply_message(
-#                                event.reply_token,
-#                                TextSendMessage(text=reply))
-#                            _leave(utype, uid)
-#                            logger.info('leaving: utype: {}, uid: {}, query: {}'.format(utype, uid, query))
-#                        else:
                         bot = LineBot(query, 'line', uid, utype)
                         reply, state_code = bot.retrieve()
                         if bool(reply):
@@ -110,22 +95,29 @@ def line_webhook(request):
                                 _message_obj(reply)
                             )
                             logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+
                         if state_code == LineBot.code_leave:
                             bot.leave()
 
                     except Exception as err:
                         logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
+
             elif isinstance(event, FollowEvent) or isinstance(event, JoinEvent):
                 try:
                     query = '<FollowEvent or JoinEvent>'
-                    reply = DISCLAIMER
                     utype, uid = _user_id(event.source)
-                    line_bot_api.reply_message(
-                        event.reply_token,
-                        TextSendMessage(text=reply))
-                    logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+                    bot = LineBot(query, 'line', uid, utype)
+                    reply, state_code = bot.retrieve()
+
+                    if bool(reply):
+                        line_bot_api.reply_message(
+                            event.reply_token,
+                            TextSendMessage(text=reply))
+                        logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+
                 except Exception as err:
                     logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
+
             elif isinstance(event, UnfollowEvent) or isinstance(event, LeaveEvent):
                 try:
                     query = '<UnfollowEvent or LeaveEvent>'
@@ -235,13 +227,3 @@ def _user_id(source):
         utype = 'room'
         uid = source.room_id
     return utype, uid
-
-
-def _leave(utype, uid):
-    try:
-        if utype == 'group':
-            line_bot_api.leave_group(uid)
-        elif utype == 'room':
-            line_bot_api.leave_room(uid)
-    except LineBotApiError as err:
-        logger.error('okbot.chat_app.leave, message: {}'.format(err))
