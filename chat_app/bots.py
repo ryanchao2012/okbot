@@ -38,6 +38,9 @@ class Chat(object):
     repeat_cold_interval = 60
     repeat_response = []
 
+    longquery_limit = 40
+    longquery_response = []
+
     kickout_key = []
     kickout_response = []
 
@@ -141,7 +144,7 @@ class Chat(object):
 
         if not bool(Chat.repeat_response):
             repeat = ChatRule.objects.get(rtype='repeat')
-            Chat.repeat_response = repeat.response.split('\n')
+            Chat.repeat_response = [r.strip() for r in repeat.response.split('\n')]
             Chat.repeat_time = int(repeat.keyword)
 
         if not(bool(Chat.kickout_key) and bool(Chat.kickout_response)):
@@ -154,6 +157,11 @@ class Chat(object):
             Chat.activate_key = [k.strip() for k in activate.keyword.split(',')]
             Chat.activate_response = [r.strip() for r in activate.response.split('\n')]
 
+        if not bool(Chat.longquery_response):
+            longquery = ChatRule.objects.get(rtype='longquery')
+            Chat.longquery_limit = int(longquery.keyword)
+            Chat.longquery_response = [r.strip() for r in longquery.response.split('\n')]
+
     def _get_user(self):
         user, schema = None, {}
         psql = PsqlQuery()
@@ -165,21 +173,25 @@ class Chat(object):
         return user, schema
 
     def _insert_chattree(self, push):
-        data = {
-            'user_id': self.user[self.uschema['id']],
-            'ancestor': self.cache[self.cschema['tree_node']],
-            'query': self.query,
-            'keyword': self.keyword,
-            'reply': push,
-            'time': self.event_time,
-            'post': self.post_ref,
-            'push_num': len(self.push_pool)
-        }
+        ancestor = -1
+        if bool(self.cache):
+            ancestor = self.cache[self.cschema['tree_node']]
         try:
+            data = {
+                'user_id': self.user[self.uschema['id']],
+                'ancestor': ancestor,
+                'query': self.query,
+                'keyword': self.keyword,
+                'reply': push,
+                'time': self.event_time,
+                'post': self.post_ref,
+                'push_num': len(self.push_pool)
+            }
             psql = PsqlQuery()
             self.chat_tree_id = psql.insert_with_col_return(self.insert_chattree_sql, data)
         except Exception as e:
                 self.logger.error('Insert ChatTree failed: {}'.format(e))
+
     def _update_chattree(self):
         if bool(self.cache) and self.cache[self.cschema['tree_node']] > 0:
             try:
@@ -439,7 +451,7 @@ class Chat(object):
             self.logger.error(e)
             self.logger.warning('Query failed: {}'.format(self.query))
         finally:
-            pass # self._upsert_cache(push)
+            pass  # self._upsert_cache(push)
 
         return push
 
@@ -452,6 +464,10 @@ class Chat(object):
 
                 l = len(Chat.repeat_response)
                 reply = Chat.repeat_response[random.randint(0, l - 1)]
+
+            elif len(self.query) > Chat.longquery_limit:
+                l = len(Chat.longquery_response)
+                reply = Chat.longquery_response[random.randint(0, l - 1)]
 
             else:
                 reply = self._chat()
