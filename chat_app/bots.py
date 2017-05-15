@@ -1,3 +1,4 @@
+import os
 import json
 import logging
 import random
@@ -15,6 +16,14 @@ from utils import (
 
 from .models import ChatRule, JiebaTagWeight
 
+from linebot import LineBotApi, WebhookParser
+from linebot.exceptions import InvalidSignatureError, LineBotApiError
+from linebot.models import (
+    FollowEvent, ImageSendMessage, JoinEvent, LeaveEvent,
+    MessageEvent, SourceGroup, SourceRoom, SourceUser,
+    TextMessage, TextSendMessage, UnfollowEvent,
+)
+
 
 class Chat(object):
     logger = logging.getLogger('okbot_chat_view')
@@ -25,25 +34,43 @@ class Chat(object):
     activate_key = None
     activate_response = []
 
+    repeat_time = 10
+    repeat_cold_interval = 60
+    repeat_response = []
+
+    kickout_key = []
+    kickout_response = []
+
     vocab_docfreq_th = 10000
     default_tokenizer = 'jieba'
     ranking_factor = 0.8
     max_query_post_num = 50000
     max_top_post_num = 5
 
+    insert_chattree_sql = '''
+        INSERT INTO chat_app_chattree(user_id, ancestor, query, keyword, reply, time, post, push_num)
+        SELECT %(user_id)s, %(ancestor)s, %(query)s, %(keyword)s,
+               %(reply)s, %(time)s, %(post)s, %(push_num)s
+        RETURNING id;
+    '''
+
+    update_chattree_sql = '''
+        UPDATE chat_app_chattree SET successor = %(successor)s WHERE id = %(id_)s;
+    '''
+
     query_chatuser_sql = '''
         SELECT * FROM chat_app_chatuser
         WHERE uid = %(uid)s AND platform = %(platform)s;
     '''
 
-    upsert_chatuser_with_return_sql = '''
-        INSERT INTO chat_app_chatuser(platform, uid, idtype, active, state)
-        SELECT %(platform)s, %(uid)s, %(idtype)s, %(active)s, %(state)s
+    upsert_chatuser_sql = '''
+        INSERT INTO chat_app_chatuser(platform, uid, idtype, active, state, chat_count)
+        SELECT %(platform)s, %(uid)s, %(idtype)s, %(active)s, %(state)s, %(chat_count)s
         ON CONFLICT (platform, uid) DO
         UPDATE SET
-        active = chat_app_chatuser.active OR EXCLUDED.active,
-        state = EXCLUDED.state
-        RETURNING * ;
+        active = EXCLUDED.active,
+        state = EXCLUDED.state,
+        chat_count = chat_app_chatuser.chat_count + 1;
     '''
 
     query_chatcache_sql = '''
@@ -51,33 +78,34 @@ class Chat(object):
     '''
 
     upsert_chatcache_sql = '''
-        INSERT INTO chat_app_chatcache(user_id, query, keyword, reply, time)
-        SELECT %(user_id)s, %(query)s, %(keyword)s, %(reply)s, %(time)s
+        INSERT INTO chat_app_chatcache(user_id, query, keyword, reply, time, repeat, post, push_num, tree_node)
+        SELECT %(user_id)s, %(query)s, %(keyword)s, %(reply)s, %(time)s, %(repeat)s, %(post)s, %(push_num)s, %(tree_node)s
         ON CONFLICT (user_id) DO
         UPDATE SET
-            query = EXCLUDED.query,
-            keyword = EXCLUDED.keyword,
-            reply = EXCLUDED.reply,
-            time = EXCLUDED.time
-        WHERE chat_app_chatcache.platform = EXCLUDED.platform;
+        query = EXCLUDED.query,
+        keyword = EXCLUDED.keyword,
+        reply = EXCLUDED.reply,
+        time = EXCLUDED.time,
+        repeat = EXCLUDED.repeat,
+        post = EXCLUDED.post,
+        push_num = EXCLUDED.push_num,
+        tree_node = EXCLUDED.tree_node;
     '''
 
     query_vocab_sql = '''
         SELECT * FROM ingest_app_vocabulary WHERE name IN %s;
     '''
+
     query_vocab2post_sql = '''
         SELECT post_id FROM ingest_app_vocabulary_post
         WHERE vocabulary_id IN %s;
     '''
+
     query_post_sql = '''
         SELECT tokenized, grammar, push, url, publish_date
         FROM ingest_app_post WHERE id IN %s AND spider != 'mentalk'
         ORDER BY publish_date DESC;
     '''
-
-#    def _pre_rulecheck(self, raw):
-#        refined, action = raw, 0
-#        return refined, action
 
     def __init__(self, query, platform, uid, idtype='', tokenizer='jieba'):
         self.platform = platform
@@ -85,9 +113,14 @@ class Chat(object):
         self.idtype = idtype
         self.event_time = timezone.now()
         self.query = query
-        self.user, self.uschema = self._upsert_user()
+        self.user, self.uschema = self._get_user()
+        if not(bool(self.user)):
+            self._upsert_user(active=False)
+            self.user, self.uschema = self._get_user()
 
-        self.cache = None
+        self.cache, self.cschema = self._query_cache()
+        self.post_ref = ''
+        self.chat_tree_id = -1
 
         if self.user[self.uschema['active']]:
             self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
@@ -106,10 +139,20 @@ class Chat(object):
             disclaimer = ChatRule.objects.get(rtype='disclaimer')
             Chat.disclaimer = disclaimer.response
 
+        if not bool(Chat.repeat_response):
+            repeat = ChatRule.objects.get(rtype='repeat')
+            Chat.repeat_response = repeat.response.split('\n')
+            Chat.repeat_time = int(repeat.keyword)
+
+        if not(bool(Chat.kickout_key) and bool(Chat.kickout_response)):
+            kickout = ChatRule.objects.get(rtype='kickout')
+            Chat.kickout_key = [k.strip() for k in kickout.keyword.split(',')]
+            Chat.kickout_response = [r.strip() for r in kickout.response.split('\n')]
+
         if not (bool(Chat.activate_key) and bool(Chat.activate_response)):
             activate = ChatRule.objects.get(rtype='activate')
-            Chat.activate_key = activate.keyword
-            Chat.activate_response = activate.response.split('\n')
+            Chat.activate_key = [k.strip() for k in activate.keyword.split(',')]
+            Chat.activate_response = [r.strip() for r in activate.response.split('\n')]
 
     def _get_user(self):
         user, schema = None, {}
@@ -121,41 +164,77 @@ class Chat(object):
 
         return user, schema
 
+    def _insert_chattree(self, push):
+        data = {
+            'user_id': self.user[self.uschema['id']],
+            'ancestor': self.cache[self.cschema['tree_node']],
+            'query': self.query,
+            'keyword': self.keyword,
+            'reply': push,
+            'time': self.event_time,
+            'post': self.post_ref,
+            'push_num': len(self.push_pool)
+        }
+        try:
+            psql = PsqlQuery()
+            self.chat_tree_id = psql.insert_with_col_return(self.insert_chattree_sql, data)
+        except Exception as e:
+                self.logger.error('Insert ChatTree failed: {}'.format(e))
+    def _update_chattree(self):
+        if bool(self.cache) and self.cache[self.cschema['tree_node']] > 0:
+            try:
+                psql = PsqlQuery()
+                psql.upsert(self.update_chattree_sql, {'successor': self.chat_tree_id, 'id_': self.cache[self.cschema['tree_node']]})
+            except Exception as e:
+                self.logger.error('Update ChatTree failed: {}'.format(e))
+
     def _upsert_user(self, active=False, state=0):
-        user, schema = None, {}
         psql = PsqlQuery()
         data = {
             'platform': self.platform,
             'uid': self.uid,
             'idtype': self.idtype,
             'active': active,
-            'state': state
+            'state': state,
+            'chat_count': 0
         }
         try:
-            user = psql.insert_with_col_return(self.upsert_chatuser_with_return_sql, data)
-            schema = psql.schema
+            psql.upsert(self.upsert_chatuser_sql, data)
         except Exception as e:
             self.logger.error('Upsert ChatUser failed: {}'.format(e))
 
-        return user, schema
+    def _query_cache(self):
+        cache, schema = None, {}
+        psql = PsqlQuery()
+        try:
+            cache_ = list(psql.query(self.query_chatcache_sql, (self.user[self.uschema['id']],)))
+            if bool(cache_):
+                cache = cache_[0]
+                schema = psql.schema
 
-    # def _query_cache(self):
-    #     psql = PsqlQuery()
-    #     try:
-    #         cache = list(psql.query(self.query_chatcache_sql, (self.user_pk,)))
-    #         self.logger.info('@@@@@@@@{}'.format(cache))
-    #     except Exception as e:
-    #         self.logger.warning(e)
+        except Exception as e:
+            self.logger.warning(e)
+
+        return cache, schema
 
     def _upsert_cache(self, push):
         if bool(self.user):
+            repeat = 0
+            if bool(self.cache):
+                if self.cache[self.cschema['query']].strip() == self.query.strip():
+                    repeat = self.cache[self.cschema['repeat']] + 1
+
             psql = PsqlQuery()
             data = {
                 'user_id': self.user[self.uschema['id']],
                 'query': self.query,
                 'keyword': self.keyword,
                 'reply': push,
-                'time': self.event_time
+                'time': self.event_time,
+                'repeat': repeat,
+                'post': self.post_ref,
+                'push_num': len(self.push_pool),
+                'tree_node': self.chat_tree_id
             }
 
             try:
@@ -261,8 +340,11 @@ class Chat(object):
         self.top_post = top_post
         self.post_score = top_score
 
+        ref = []
         for p, s in zip(top_post, top_score):
-            self.logger.info('[{:.2f}]{} {}'.format(s, p[self.pschema['tokenized']], p[self.pschema['url']]))
+            ref.append('[{:.2f}]{}\n{}'.format(s, p[self.pschema['tokenized']], p[self.pschema['url']]))
+        self.post_ref = '\n\n'.join(ref)
+        self.logger.info(self.post_ref)
 
     def _clean_push(self):
         push_pool = []
@@ -308,8 +390,6 @@ class Chat(object):
 
         self.push_pool = push_pool
 
-        print('@@@len(push_pool)', len(push_pool))
-
     def _ranking_push(self):
         # TODO: ranking push
         # ==================
@@ -348,28 +428,45 @@ class Chat(object):
             self._clean_push()
             push = self._ranking_push()
 
+            self._insert_chattree(push)
+            self._update_chattree()
+            self._upsert_cache(push)
+            
+
         except Exception as e:
             default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
             push = default_reply[random.randint(0, len(default_reply) - 1)]
             self.logger.error(e)
             self.logger.warning('Query failed: {}'.format(self.query))
         finally:
-            self._upsert_cache(push)
+            pass # self._upsert_cache(push)
 
         return push
 
     def retrieve(self):
         if self.user[self.uschema['active']]:
-            reply = self._chat()
+            if bool(self.cache) \
+                and self.cache[self.cschema['repeat']] > Chat.repeat_time \
+                and self.cache[self.cschema['query']].strip() == self.query.strip() \
+                and (self.event_time.timestamp() - self.cache[self.cschema['time']].timestamp()) < Chat.repeat_cold_interval:
+
+                l = len(Chat.repeat_response)
+                reply = Chat.repeat_response[random.randint(0, l - 1)]
+
+            else:
+                reply = self._chat()
+
+            self._upsert_user(active=True)
+
         else:
-            if self.query == Chat.activate_key:
+            if self.query in Chat.activate_key:
                 self._upsert_user(active=True)
                 l = len(Chat.activate_response)
                 reply = Chat.activate_response[random.randint(0, l - 1)]
             else:
                 reply = Chat.disclaimer
 
-        return reply
+        return reply.strip()
 
 
 class MessengerBot(Chat):
@@ -377,4 +474,27 @@ class MessengerBot(Chat):
 
 
 class LineBot(Chat):
-    pass
+    code_leave = 1
+    code_normal = 0
+    line_bot_api = LineBotApi(os.environ['LINE_CHANNEL_ACCESS_TOKEN'])
+    line_webhook_parser = WebhookParser(os.environ['LINE_CHANNEL_SECRET'])
+
+    def retrieve(self):
+        if self.query in Chat.kickout_key and self.idtype != 'user':
+            l = len(Chat.kickout_response)
+            return Chat.kickout_response[random.randint(0, l - 1)], LineBot.code_leave
+        else:
+            return super(LineBot, self).retrieve(), LineBot.code_normal
+
+
+    def leave(self):
+        try:
+            if self.idtype == 'group':
+                LineBot.line_bot_api.leave_group(self.uid)
+            elif self.idtype == 'room':
+                LineBot.line_bot_api.leave_room(self.uid)
+
+        except LineBotApiError as err:
+            logger.error('okbot.chat_app.bots.LineBot.leave, message: {}'.format(err))
+
+        self._upsert_user(active=False)

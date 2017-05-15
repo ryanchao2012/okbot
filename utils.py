@@ -56,7 +56,6 @@ class PsqlQuery(PsqlAbstract):
 
     @PsqlAbstract.session()
     def _insert_with_col_return(self, connect, cursor, query_=None, data=None):
-        self._get_schema(query_=query_, data=data)
         cursor.execute(query_, data)
         ret = cursor.fetchone()
         connect.commit()

@@ -94,19 +94,25 @@ def line_webhook(request):
                     try:
                         query = event.message.text
                         utype, uid = _user_id(event.source)
-                        if query == '三杯熊滾' and utype != 'user':
-                            reply = '你會後悔'
+#                        if query == '三杯熊滾' and utype != 'user':
+#                            reply = '你會後悔'
+#                            line_bot_api.reply_message(
+#                                event.reply_token,
+#                                TextSendMessage(text=reply))
+#                            _leave(utype, uid)
+#                            logger.info('leaving: utype: {}, uid: {}, query: {}'.format(utype, uid, query))
+#                        else:
+                        bot = LineBot(query, 'line', uid, utype)
+                        reply, state_code = bot.retrieve()
+                        if bool(reply):
                             line_bot_api.reply_message(
                                 event.reply_token,
-                                TextSendMessage(text=reply))
-                            _leave(utype, uid)
-                            logger.info('leaving: utype: {}, uid: {}, query: {}'.format(utype, uid, query))
-                        else:
-                            reply = LineBot(query, 'line', uid, utype).retrieve()
-                            line_bot_api.reply_message(
-                                event.reply_token,
-                                _message_obj(reply))
+                                _message_obj(reply)
+                            )
                             logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+                        if state_code == LineBot.code_leave:
+                            bot.leave()
+
                     except Exception as err:
                         logger.error('okbot.chat_app.line_webhook, message: {}'.format(err))
             elif isinstance(event, FollowEvent) or isinstance(event, JoinEvent):

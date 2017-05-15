@@ -23,7 +23,7 @@ class JiebaTagWeight(models.Model):
 
 class ChatRule(models.Model):
     rtype = models.CharField(max_length=31, verbose_name='type')
-    keyword = models.CharField(max_length=1023)
+    keyword = models.CharField(max_length=1023, blank=True, null=True)
     response = models.TextField(blank=True, null=True)
 
     def __str__(self):
@@ -35,20 +35,20 @@ class ChatRule(models.Model):
 
 
 class ChatCache(models.Model):
-#    platform = models.CharField(max_length=31)
-#    uid = models.CharField(max_length=127, unique=True)
-#    idtype = models.CharField(max_length=31, blank=True, null=True)
-    user = models.OneToOneField('ChatUser', on_delete=models.SET_NULL, null=True)
+    user = models.OneToOneField('ChatUser', on_delete=models.CASCADE)
     query = models.TextField()
     keyword = models.TextField(blank=True, null=True)
     reply = models.TextField()
     time = models.DateTimeField(default=timezone.now)
+    repeat = models.IntegerField(default=0)
+    post = models.TextField(null=True, blank=True)
+    push_num = models.IntegerField(default=0, null=True, blank=True)
+    tree_node = models.IntegerField(default=-1, null=True, blank=True)
 
-    def get_query(self):
-        return self.query[:20]
+    class Meta:
+        verbose_name = 'Chat Cache'
+        verbose_name_plural = verbose_name
 
-    def get_reply(self):
-        return self.reply[:20]
 
 class ChatUser(models.Model):
     platform = models.CharField(max_length=31)
@@ -56,11 +56,29 @@ class ChatUser(models.Model):
     idtype = models.CharField(max_length=31, blank=True, null=True)
     active = models.BooleanField(default=False)
     state = models.IntegerField(default=0)
-
+    chat_count = models.IntegerField(default=0)
 
     class Meta:
         unique_together = ('platform', 'uid')
+        verbose_name = 'Chat User'
+        verbose_name_plural = verbose_name
 
     def __str__(self):
         return '<{}>{}'.format(self.platform, self.uid)
-# class ChatTree(model.Model):
+
+
+class ChatTree(models.Model):
+    user = models.ForeignKey('ChatUser', on_delete=models.CASCADE)
+    ancestor = models.IntegerField(default=-1, null=True, blank=True)
+    successor = models.IntegerField(default=-1, null=True, blank=True)
+    query = models.TextField()
+    keyword = models.TextField(blank=True, null=True)
+    reply = models.TextField()
+    time = models.DateTimeField(default=timezone.now)
+    post = models.TextField(null=True, blank=True)
+    push_num = models.IntegerField(default=0, null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Chat Tree'
+        verbose_name_plural = verbose_name
+
