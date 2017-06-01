@@ -1,7 +1,9 @@
 import math
 import os
 
+#import jieba
 import jieba.posseg as pseg
+#jieba.set_dictionary('/var/local/jieba/dict.txt.big')
 
 import psycopg2
 

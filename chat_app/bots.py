@@ -46,7 +46,7 @@ class Chat(object):
 
     vocab_docfreq_th = 10000
     default_tokenizer = 'jieba'
-    ranking_factor = 0.8
+    ranking_factor = 0.9
     max_query_post_num = 50000
     max_top_post_num = 5
 
