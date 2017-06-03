@@ -1,22 +1,12 @@
 # -*- coding: utf-8 -*-
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.utils import timezone
-import jieba.posseg as pseg
-#import jieba
-#jieba.set_dictionary('/var/local/jieba/dict.txt.big')
-import collections
-import json
 import time
-import os
-import re
 
-from ingest_app.models import Joblog
-from utils import PsqlQuery, Tokenizer
-
-
+from utils import PsqlQuery
 
 import logging
-logger = logging.getLogger('okbot_ingest')
+logger = logging.getLogger('okbot_outgest')
 logger.setLevel(logging.INFO)
 ch = logging.StreamHandler()
 chformatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
@@ -43,11 +33,8 @@ class Command(BaseCommand):
             logger.warning('Fail to parse date, the correct format is: <year>-<month>-<date>. Replace the date to {}.'.format(date_))
             fromdate = timezone.datetime.strptime(date_, '%Y-%m-%d')
 
-        
         time_tic = time.time()
         logger.info('okbot outgest job start.')
-        now = timezone.now()
-
 
         outgester = Outgester(fromdate.strftime('%Y-%m-%d'))
         delete_num = 0
@@ -61,7 +48,6 @@ class Command(BaseCommand):
         logger.info('okbot outgest job finished. elapsed time: {:.2f} sec.'.format(time.time() - time_tic))
 
 
-
 class Outgester(object):
     delete_vocab2post_sql = '''
             DELETE FROM ingest_app_vocabulary_post WHERE id in %s;
@@ -72,7 +58,7 @@ class Outgester(object):
     '''
 
     query_post_sql = '''
-            SELECT id, title, publish_date, url 
+            SELECT id, title, publish_date, url
             FROM ingest_app_post WHERE publish_date < TIMESTAMP %s;
     '''
 
@@ -85,15 +71,13 @@ class Outgester(object):
     '''
 
     update_vocab_docfreq_sql = '''
-            UPDATE ingest_app_vocabulary AS old SET doc_freq = new.doc_freq 
-            FROM (SELECT unnest( %(id_)s ) as id, unnest( %(freq)s ) as doc_freq) as new  
+            UPDATE ingest_app_vocabulary AS old SET doc_freq = new.doc_freq
+            FROM (SELECT unnest( %(id_)s ) as id, unnest( %(freq)s ) as doc_freq) as new
             WHERE old.id = new.id;
     '''
 
-
     def __init__(self, fromdate):
         self.fromdate = fromdate
-
 
     def _query_all(self, sql_string, data=None):
         psql = PsqlQuery()
@@ -117,8 +101,6 @@ class Outgester(object):
 
         self._update_vocab_docfreq(vocab_id)
 
-
-
     def _update_vocab_docfreq(self, vocab_id):
         qvocab2post, schema = self._query_all(self.query_vocab2post_sql_by_vocab, (tuple(vocab_id),))
         qvocab_id = [v2p[schema['vocabulary_id']] for v2p in qvocab2post]
@@ -131,9 +113,7 @@ class Outgester(object):
         freq = list(vocab_cnt.values())
 
         psql = PsqlQuery()
-        psql.upsert(self.update_vocab_docfreq_sql, {'id_':id_, 'freq': freq})
-
-
+        psql.upsert(self.update_vocab_docfreq_sql, {'id_': id_, 'freq': freq})
 
     def query_oldpost_batch(self, batch_size=1000):
         psql = PsqlQuery()
@@ -150,8 +130,6 @@ class Outgester(object):
                 batch = []
 
         yield batch, schema
-
-
 
 # In [50]: p = psql._query(query_='''SELECT title, publish_date, ur
 #     ...: l FROM ingest_app_post WHERE publish_date > TIMESTAMP '2

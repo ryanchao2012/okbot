@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
-import jieba.posseg as pseg
-#import jieba
-#jieba.set_dictionary('/var/local/jieba/dict.txt.big')
 import collections
 import json
 import time

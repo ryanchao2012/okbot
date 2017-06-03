@@ -1,9 +1,8 @@
 import math
 import os
 
-#import jieba
+import jieba
 import jieba.posseg as pseg
-#jieba.set_dictionary('/var/local/jieba/dict.txt.big')
 
 import psycopg2
 
@@ -113,15 +112,21 @@ class TokenizerNotExistException(Exception):
 
 class Tokenizer(object):
 
-    _tokenizer = ('jieba',)
+    _tokenizer = ('jieba', 'jieba_tw')
 
     def __init__(self, tok_tag):
         if tok_tag not in self._tokenizer:
             raise TokenizerNotExistException
         self.tok_tag = tok_tag
 
+        if tok_tag == 'jieba':
+            jieba.set_dictionary('/var/local/jieba/dict.default.txt')
+        elif tok_tag == 'jieba_tw':
+            jieba.set_dictionary('/var/local/jieba/dict_jieba_zh.txt')
+            jieba.load_userdict('/var/local/jieba/user_dict.txt')
+
     def cut(self, sentence):
-        if self.tok_tag == 'jieba':
+        if self.tok_tag in ['jieba', 'jieba_tw']:
             pairs = pseg.cut(sentence)
             tok, words, flags = [], [], []
 

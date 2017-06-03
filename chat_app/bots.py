@@ -443,7 +443,6 @@ class Chat(object):
             self._insert_chattree(push)
             self._update_chattree()
             self._upsert_cache(push)
-            
 
         except Exception as e:
             default_reply = ['嗄', '三小', '滾喇', '嘻嘻']
@@ -502,7 +501,6 @@ class LineBot(Chat):
         else:
             return super(LineBot, self).retrieve(), LineBot.code_normal
 
-
     def leave(self):
         try:
             if self.idtype == 'group':
@@ -511,6 +509,6 @@ class LineBot(Chat):
                 LineBot.line_bot_api.leave_room(self.uid)
 
         except LineBotApiError as err:
-            logger.error('okbot.chat_app.bots.LineBot.leave, message: {}'.format(err))
+            self.logger.error('okbot.chat_app.bots.LineBot.leave, message: {}'.format(err))
 
         self._upsert_user(active=False)
