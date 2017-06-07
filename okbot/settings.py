@@ -42,7 +42,7 @@ INSTALLED_APPS = [
     'crawl_app',
     'ingest_app',
     'query_app',
-    'train_app',
+    'evaluate_app',
 ]
 
 MIDDLEWARE = [

@@ -4,10 +4,15 @@ from django.utils import timezone
 # Create your models here.
 
 
+
 class Post(models.Model):
     title = models.CharField(max_length=255)
-    tokenized = models.CharField(max_length=255)
-    grammar = models.CharField(max_length=255)
+
+    tokenized = models.CharField(max_length=255, default='', blank=True, null=True)
+    grammar = models.CharField(max_length=255, default='', blank=True, null=True)
+    tokenized_jieba_tw = models.CharField(max_length=255, default='', blank=True, null=True)
+    grammar_jieba_tw = models.CharField(max_length=255, default='', blank=True, null=True)
+
     tag = models.CharField(max_length=63, default='', blank=True, null=True)
     spider = models.CharField(max_length=63)
     url = models.CharField(max_length=1023, unique=True)
@@ -17,8 +22,8 @@ class Post(models.Model):
     last_update = models.DateTimeField(default=timezone.now)
     update_count = models.IntegerField(default=0)
     allow_update = models.BooleanField(default=True)
-    entity = models.CharField(max_length=63, blank=True, null=True)
-    verb = models.CharField(max_length=63, blank=True, null=True)
+    #entity = models.CharField(max_length=63, blank=True, null=True)
+    #verb = models.CharField(max_length=63, blank=True, null=True)
 
     class Meta:
         verbose_name = 'POST'
@@ -26,6 +31,18 @@ class Post(models.Model):
 
     def __str__(self):
         return '<{}>{}'.format(self.spider, self.title[:20])
+
+
+class Tokenized(models.Model):
+    tokenized = models.CharField(max_length=255)
+    tokenizer = models.CharField(max_length=31)
+    # post = models.ForeignKey(Post)
+
+
+class Grammar(models.Model):
+    grammer = models.CharField(max_length=255)
+    tokenizer = models.CharField(max_length=31)
+    # post = models.ForeignKey(Post)
 
 
 class Vocabulary(models.Model):
