@@ -120,23 +120,29 @@ class Tokenizer(object):
         self.tok_tag = tok_tag
 
         if tok_tag == 'jieba':
-            jieba.set_dictionary('/var/local/jieba/dict.default.txt')
+            pass
+            # jieba.set_dictionary('/var/local/jieba/dict.default.txt')
         elif tok_tag == 'jieba_tw':
-            jieba.set_dictionary('/var/local/jieba/dict_jieba_zh.txt')
-            jieba.load_userdict('/var/local/jieba/user_dict.txt')
+            pass
+            # jieba.set_dictionary('/var/local/jieba/dict_jieba_zh.txt')
+            # jieba.load_userdict('/var/local/jieba/user_dict.txt')
 
-    def cut(self, sentence):
+    def cut(self, sentence, pos=True):
         if self.tok_tag in ['jieba', 'jieba_tw']:
-            pairs = pseg.cut(sentence)
-            tok, words, flags = [], [], []
+            if pos:
+                pairs = pseg.cut(sentence)
+                tok, words, flags = [], [], []
 
-            for p in pairs:
-                w = p.word.strip()
-                if len(w) > 0:
-                    tok.append(p)
-                    words.append(w)
-                    flags.append(p.flag)
-            return tok, words, flags
+                for p in pairs:
+                    w = p.word.strip()
+                    if len(w) > 0:
+                        tok.append(p)
+                        words.append(w)
+                        flags.append(p.flag)
+                return tok, words, flags
+            else:
+                return [w.strip() for w in jieba.cut(sentence) if bool(w.strip())]
+
 
 
 # summation(tf * (k1 + 1) /(tf + k1*(1 - b + b*len(doc)/AVE_DOC_LEN)))

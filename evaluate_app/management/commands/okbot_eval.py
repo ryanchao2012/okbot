@@ -3,13 +3,18 @@ import time
 import json
 import logging
 import numpy as np
-import gensim
+from gensim.models.doc2vec import Doc2Vec
 from django.core.management.base import BaseCommand
-from utils import PsqlQuery, tfidf_jaccard_similarity
+from utils import (
+    Tokenizer, PsqlQuery, tfidf_jaccard_similarity
+)
 from django.utils import timezone
 from chat_app.models import JiebaTagWeight
-from evaluate_app.metrics import AveragePrecision
+from evaluate_app.metrics import doc2vec_ndcg
 
+
+W2V_PATH = '/var/local/okbot/w2v/segtag-vec.bin'
+D2V_PATH = '/var/local/okbot/doc2vec/tok2push.model'
 
 logger = logging.getLogger('okbot_eval')
 logger.setLevel(logging.INFO)
@@ -36,32 +41,63 @@ logger.addHandler(ch)
 class Command(BaseCommand):
     help = '''
            Evaluate retrieval engine.
-           ex: python manage.py okbot_eval
+           ex: ./manage.py okbot_eval --tokenizer=jieba --w2v=0 --jtag=0 --sample=1
            '''
 
     def add_arguments(self, parser):
-        # parser.add_argument('--repeat', nargs=1, type=str)
+        parser.add_argument('--sample', nargs=1, type=int)
         parser.add_argument('--tokenizer', nargs=1, type=str)
-        parser.add_argument('--w2v', nargs=1, type=str)
+        parser.add_argument('--w2v', nargs=1, type=int)
+        parser.add_argument('--jtag', nargs=1, type=int)
         pass
 
+    def _parse_arg(self, name, default, options):
+        try:
+            return options[name][0]
+        except:
+            return default
+
     def handle(self, *args, **options):
-        tok_tag = options['tokenizer'][0]
-        # repeat = int(options['repeat'][0])
-        w2v = int(options['w2v'][0]) > 0
+        tok_tag = self._parse_arg('tokenizer', 'jieba', options)
+        sample = self._parse_arg('sample', 1, options)
+        w2v = self._parse_arg('w2v', 0, options) > 0
+        jtag = self._parse_arg('jtag', 0, options) > 0
+        print(tok_tag, sample, w2v, jtag)
 
-        evaluator = Evaluator(w2v)
-        relevant_push = evaluator.get_relevant_push()
-        predict_push = evaluator.get_predict_push(tokenizer=tok_tag, w2v=w2v)
-        print(evaluator.get_ans_post())
-        #print('=============')
-        #print(relevant_push)
-        print('=============')
-        print(predict_push)
-        scorer = AveragePrecision(relevant_push, predict_push)
-        score = scorer.bf_score()
+        print('Loading doc2vec model...')
+        d2v_model = Doc2Vec.load(D2V_PATH)
+        print('Model loaded.')
 
-        print(score)
+        w2v_model = None
+        if w2v:
+            print('Loading word2vec model...')
+            w2v_model = gensim.models.KeyedVectors.load_word2vec_format(W2V_PATH, binary=True, unicode_errors='ignore')
+            print('Model loaded.')
+        jiebatag_weight = {}
+        if jtag:
+            jtagweight = JiebaTagWeight.objects.all()
+            for jt in jtagweight:
+                jiebatag_weight[jt.name] = {'weight': jt.weight, 'punish': jt.punish_factor}
+        
+
+        evaluator = Evaluator()
+        
+
+        for _ in range(sample):
+            evaluator.draw()
+            raw_push = evaluator.get_predict_push(
+                tokenizer=tok_tag, w2v_model=w2v_model, jiebatag_weight=jiebatag_weight
+            )
+
+            topic = evaluator.get_topic_field('tokenized')
+            topic_words = Tokenizer(tok_tag).cut(topic, pos=False)
+            predict_words_ls = [Tokenizer(tok_tag).cut(push, pos=False) for push in raw_push if 'http' not in push]
+            print(topic_words)
+            print(len(predict_words_ls))
+            
+            score = doc2vec_ndcg(topic_words, predict_words_ls, d2v_model)
+            print(score)
+
         # jlpath, tok_tag = options['jlpath'][0], options['tokenizer'][0]
 
         # tokenizer = Tokenizer(tok_tag)
@@ -108,7 +144,7 @@ class Evaluator(object):
     w2v_model = None
     vocab_docfreq_th = 10000
     default_tokenizer = 'jieba'
-    ranking_factor = 0.5
+    ranking_factor = 0.8
     max_query_post_num = 50000
     max_top_post_num = 10
 
@@ -131,24 +167,20 @@ class Evaluator(object):
         ORDER BY publish_date DESC;
     '''
 
-    def __init__(self, w2v=False):
+    def __init__(self):
         psql = PsqlQuery()
-        self.ans_post = list(psql.query(self.random_query_sql))[0]
-        self.ans_pschema = psql.schema
+        self.topic_post = list(psql.query(self.random_query_sql))[0]
+        self.topic_pschema = psql.schema
 
-        if not bool(Evaluator.jieba_tag_weight):
-            jtag = JiebaTagWeight.objects.all()
-            for jt in jtag:
-                Evaluator.jieba_tag_weight[jt.name] = {'weight': jt.weight, 'punish': jt.punish_factor}
 
-        if not bool(Evaluator.w2v_model) and w2v:
-            self.logger.info('loading word2vec model...')
-            Evaluator.w2v_model = gensim.models.KeyedVectors.load_word2vec_format('/var/local/w2v/segtag-vec.bin', binary=True, unicode_errors='ignore')
-            self.logger.info('loading completed')
+    def draw(self):
+        psql = PsqlQuery()
+        self.topic_post = list(psql.query(self.random_query_sql))[0]
+        self.topic_pschema = psql.schema
 
-    def _query_vocab(self, tokenizer='jieba', w2v=False):
-        words = self.ans_post[self.ans_pschema['tokenized']].split()
-        flags = self.ans_post[self.ans_pschema['grammar']].split()
+    def _query_vocab(self, tokenizer='jieba', w2v_model=None, jiebatag_weight={}):
+        words = self.topic_post[self.topic_pschema['tokenized']].split()
+        flags = self.topic_post[self.topic_pschema['grammar']].split()
 
         # self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(self.post[self.pschema['title']])
 
@@ -157,11 +189,11 @@ class Evaluator(object):
 
         # Merge word2vec model here
         # ===============================
-        if w2v and bool(Evaluator.w2v_model):
+        if bool(w2v_model):
             try:
                 w2v_query = ['{}:{}'.format(w, f) for w, f in zip(words, flags) if f[0] in ['v', 'n'] or f in ['eng']]
                 if bool(w2v_query):
-                    w2v_neighbor = Evaluator.w2v_model.most_similar(positive=w2v_query, topn=min(3, len(w2v_query)))
+                    w2v_neighbor = w2v_model.most_similar(positive=w2v_query, topn=min(3, len(w2v_query)))
 
                     w2v_name = ['--+--'.join('{}:{}'.format(w[0], tokenizer).split(':')) for w in w2v_neighbor]
                     w2v_score = [w[1] for w in w2v_neighbor]
@@ -179,8 +211,8 @@ class Evaluator(object):
 
         vschema = psql.schema
         _tag_weight = {
-            q[vschema['tag']]: Evaluator.jieba_tag_weight[q[vschema['tag']]]['weight']
-            if q[vschema['tag']] in Evaluator.jieba_tag_weight else 1.0 for q in qvocab
+            q[vschema['tag']]: jiebatag_weight[q[vschema['tag']]]['weight']
+            if q[vschema['tag']] in jiebatag_weight else 1.0 for q in qvocab
         }
         # ===============================
 
@@ -208,7 +240,7 @@ class Evaluator(object):
         _query_pid = list(PsqlQuery().query(
             self.query_vocab2post_sql, (tuple(vid),))
         )
-        query_pid = [p[0] for p in _query_pid if p[0] != self.ans_post[self.ans_pschema['id']]]
+        query_pid = [p[0] for p in _query_pid if p[0] != self.topic_post[self.topic_pschema['id']]]
         psql = PsqlQuery()
         allpost = psql.query(self.query_post_sql, (tuple(query_pid),))
         return allpost, psql.schema
@@ -259,7 +291,7 @@ class Evaluator(object):
             ref.append('[{:.2f}]{}\n{}'.format(s, p[pschema['tokenized']], p[pschema['url']]))
 
         post_ref = '\n\n'.join(ref)
-        self.logger.info('\n' + post_ref)
+        # self.logger.info('\n' + post_ref)
 
         return top_post, top_score, post_ref
 
@@ -337,22 +369,27 @@ class Evaluator(object):
         return top_push
 
     def get_relevant_push(self):
-        post = self.ans_post
-        pschema = self.ans_pschema
+        post = self.topic_post
+        pschema = self.topic_pschema
 
         push_pool = self._clean_push([post], [1.0], pschema, verbose=False)
         top_push = self._ranking_push(push_pool, verbose=False)
         return top_push
 
-    def get_predict_push(self, tokenizer='jieba', w2v=False):
-        vocab, vid = self._query_vocab(tokenizer=tokenizer, w2v=w2v)
+    def get_predict_push(self, tokenizer='jieba', w2v_model=None, jiebatag_weight={}):
+        vocab, vid = self._query_vocab(
+            tokenizer=tokenizer, w2v_model=w2v_model, jiebatag_weight=jiebatag_weight
+        )
         allpost, pschema = self._query_post(vid)
+
+        # slow
         similar_post, similar_score = self._cal_similarity(vocab, allpost, pschema)
         top_post, top_score, post_ref = self._ranking_post(similar_post, similar_score, pschema)
+        
         push_pool = self._clean_push(top_post, top_score, pschema)
         top_push = self._ranking_push(push_pool)
 
         return top_push
 
-    def get_ans_post(self):
-        return self.ans_post
+    def get_topic_field(self, field='tokenized'):
+        return self.topic_post[self.topic_pschema[field]]

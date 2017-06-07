@@ -1,4 +1,5 @@
 import numpy as np
+import math
 
 
 class AveragePrecision(object):
@@ -20,8 +21,23 @@ class AveragePrecision(object):
 
         return np.mean(score)
 
-    # TODO
-    """Document-to-vector matching."""
-    def doc2vec_score(self, model, k=30):
-        return 0.0
+
+# TODO
+"""Document-to-vector NDCG."""
+def doc2vec_ndcg(topic_words, predict_words_ls, model, k=30, ideal=0.8):
+    rel = [model.docvecs.similarity_unseen_docs(model, topic_words, predict_words)
+                for predict_words in predict_words_ls[:k]
+    ]
+
+    dcg = rel[0]
+    for i, r in enumerate(rel[1:], 2):
+        dcg += (r / math.log2(i))
+
+    icdg = ideal
+    for i in range(2, 2 + len(rel[1:])):
+        icdg += (ideal / math.log2(i))
+
+    print('@@@NDCG', dcg, icdg)
+
+    return dcg / icdg
 
