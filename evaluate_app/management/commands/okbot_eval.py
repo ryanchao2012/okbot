@@ -11,6 +11,14 @@ from chat_app.models import JiebaTagWeight
 from evaluate_app.metrics import AveragePrecision
 
 
+logger = logging.getLogger('okbot_eval')
+logger.setLevel(logging.INFO)
+ch = logging.StreamHandler()
+chformatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s', datefmt='[%d/%b/%Y %H:%M:%S]')
+ch.setLevel(logging.INFO)
+ch.setFormatter(chformatter)
+logger.addHandler(ch)
+
 '''
 每x秒query一次，算一次map
 週期預設為每分鐘一次
@@ -42,10 +50,14 @@ class Command(BaseCommand):
         # repeat = int(options['repeat'][0])
         w2v = int(options['w2v'][0]) > 0
 
-        evaluator = Evaluator()
+        evaluator = Evaluator(w2v)
         relevant_push = evaluator.get_relevant_push()
         predict_push = evaluator.get_predict_push(tokenizer=tok_tag, w2v=w2v)
-
+        print(evaluator.get_ans_post())
+        #print('=============')
+        #print(relevant_push)
+        print('=============')
+        print(predict_push)
         scorer = AveragePrecision(relevant_push, predict_push)
         score = scorer.bf_score()
 
@@ -96,12 +108,12 @@ class Evaluator(object):
     w2v_model = None
     vocab_docfreq_th = 10000
     default_tokenizer = 'jieba'
-    ranking_factor = 0.9
+    ranking_factor = 0.5
     max_query_post_num = 50000
-    max_top_post_num = 5
+    max_top_post_num = 10
 
     random_query_sql = '''
-        SELECT id, title, tokenized, grammar, psuh, url FROM ingest_app_post TABLESAMPLE SYSTEM(0.01);
+        SELECT id, title, tokenized, grammar, push, url FROM ingest_app_post TABLESAMPLE SYSTEM(0.01);
     '''
 
     query_vocab_sql = '''
@@ -119,7 +131,7 @@ class Evaluator(object):
         ORDER BY publish_date DESC;
     '''
 
-    def __init__(self):
+    def __init__(self, w2v=False):
         psql = PsqlQuery()
         self.ans_post = list(psql.query(self.random_query_sql))[0]
         self.ans_pschema = psql.schema
@@ -129,15 +141,14 @@ class Evaluator(object):
             for jt in jtag:
                 Evaluator.jieba_tag_weight[jt.name] = {'weight': jt.weight, 'punish': jt.punish_factor}
 
-        if not bool(Evaluator.w2v_model):
+        if not bool(Evaluator.w2v_model) and w2v:
             self.logger.info('loading word2vec model...')
-            Evaluator.w2v_model = gensim.models.KeyedVectors.load_word2vec_format('/vat/local/w2v/segtag-vec.bin', binary=True, unicode_errors='ignore')
+            Evaluator.w2v_model = gensim.models.KeyedVectors.load_word2vec_format('/var/local/w2v/segtag-vec.bin', binary=True, unicode_errors='ignore')
             self.logger.info('loading completed')
 
     def _query_vocab(self, tokenizer='jieba', w2v=False):
-
-        words = self.ans_post[self.ans_pschema['tokenized']]
-        flags = self.ans_post[self.ans_pschema['grammar']]
+        words = self.ans_post[self.ans_pschema['tokenized']].split()
+        flags = self.ans_post[self.ans_pschema['grammar']].split()
 
         # self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(self.post[self.pschema['title']])
 
@@ -181,8 +192,8 @@ class Evaluator(object):
             } for q in qvocab
         ]
 
-        keyword = json.dumps(vocab, indent=4, ensure_ascii=False, sort_keys=True)
-        self.logger.info(keyword)
+        # keyword = json.dumps(vocab, indent=4, ensure_ascii=False, sort_keys=True)
+        # self.logger.info(keyword)
 
         vid = [
             q[vschema['id']]
@@ -342,3 +353,6 @@ class Evaluator(object):
         top_push = self._ranking_push(push_pool)
 
         return top_push
+
+    def get_ans_post(self):
+        return self.ans_post
