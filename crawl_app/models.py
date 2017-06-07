@@ -1,11 +1,8 @@
-from django.utils.translation import ugettext_lazy as _
 from django.db import models
 from django.utils import timezone
+from django.utils.translation import ugettext_lazy as _
 
 # Create your models here.
-
-
-
 
 
 class Blacklist(models.Model):
@@ -26,6 +23,7 @@ class Blacklist(models.Model):
     class Meta:
         verbose_name = _('BLACK LIST')
         verbose_name_plural = verbose_name
+
 
 class Spider(models.Model):
     tag = models.CharField(max_length=255)
@@ -60,4 +58,3 @@ class Joblog(models.Model):
     class Meta:
         verbose_name = _('JOB LOG')
         verbose_name_plural = verbose_name
-

@@ -1,8 +1,7 @@
-from django.utils import timezone
 from django.db import models
+from django.utils import timezone
 
 # Create your models here.
-
 
 
 class Post(models.Model):
@@ -29,7 +28,6 @@ class Post(models.Model):
         return '<{}>{}'.format(self.spider, self.title[:20])
 
 
-
 class Vocabulary(models.Model):
     name = models.CharField(max_length=255, unique=True)
     word = models.CharField(max_length=255)
@@ -50,8 +48,7 @@ class Vocabulary(models.Model):
         return '{}'.format(self.word)
 
 
-
-#class Grammar(models.Model):
+# class Grammar(models.Model):
 #    name = models.CharField(max_length=1023, unique=True)
 #    sent_tag = models.CharField(max_length=1023)
 #    tokenizer = models.CharField(max_length=255)
@@ -69,7 +66,7 @@ class Joblog(models.Model):
     name = models.CharField(max_length=255)
     start_time = models.DateTimeField(default=timezone.now)
     result = models.TextField()
-    finish_time = models.DateTimeField(default=timezone.now, blank=True, null=True)
+    finish_time = models.DateTimeField(blank=True, null=True)
     status = models.CharField(max_length=31, default='running')
 
     def __str__(self):
@@ -78,5 +75,3 @@ class Joblog(models.Model):
     class Meta:
         verbose_name = 'JOB LOG'
         verbose_name_plural = verbose_name
-
- 

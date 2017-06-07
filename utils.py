@@ -1,8 +1,10 @@
-import psycopg2
-import jieba.posseg as pseg
 import math
-import time
 import os
+
+import jieba
+import jieba.posseg as pseg
+
+import psycopg2
 
 
 class PsqlAbstract(object):
@@ -50,8 +52,18 @@ class PsqlQuery(PsqlAbstract):
         super(self.__class__, self).__init__(username=username, db=db, password=password)
         self.schema = {}
 
+    def insert_with_col_return(self, q, data=None):
+        return self._insert_with_col_return(query_=q, data=data)
+
+    @PsqlAbstract.session()
+    def _insert_with_col_return(self, connect, cursor, query_=None, data=None):
+        cursor.execute(query_, data)
+        ret = cursor.fetchone()
+        connect.commit()
+        return ret
+
     def upsert(self, q, data=None):
-        self._upsert(query_=q, data=data)
+        return self._upsert(query_=q, data=data)
 
     @PsqlAbstract.session()
     def _upsert(self, connect, cursor, query_=None, data=None):
@@ -65,7 +77,6 @@ class PsqlQuery(PsqlAbstract):
     def _delete(self, connect, cursor, query_=None, data=None):
         cursor.execute(query_, data)
         connect.commit()
-
 
     def query(self, q, data=None, skip=False):
         if not skip:
@@ -95,21 +106,27 @@ class PsqlQuery(PsqlAbstract):
         PsqlAbstract._close(connect, cursor)
 
 
-
 class TokenizerNotExistException(Exception):
     pass
 
+
 class Tokenizer(object):
 
-    _tokenizer = ('jieba',)
+    _tokenizer = ('jieba', 'jieba_tw')
 
     def __init__(self, tok_tag):
         if tok_tag not in self._tokenizer:
             raise TokenizerNotExistException
         self.tok_tag = tok_tag
 
+        if tok_tag == 'jieba':
+            jieba.set_dictionary('/var/local/jieba/dict.default.txt')
+        elif tok_tag == 'jieba_tw':
+            jieba.set_dictionary('/var/local/jieba/dict_jieba_zh.txt')
+            jieba.load_userdict('/var/local/jieba/user_dict.txt')
+
     def cut(self, sentence):
-        if self.tok_tag == 'jieba':
+        if self.tok_tag in ['jieba', 'jieba_tw']:
             pairs = pseg.cut(sentence)
             tok, words, flags = [], [], []
 
@@ -122,34 +139,34 @@ class Tokenizer(object):
             return tok, words, flags
 
 
-
 # summation(tf * (k1 + 1) /(tf + k1*(1 - b + b*len(doc)/AVE_DOC_LEN)))
 # k1 = [1.2, 2.0]
 def bm25_similarity(vocab, doc, k1=1.5, b=0.75):
-    DOC_NUM = 300000.0
-    AVE_TITLE_LEN = 19.0
+    doc_num = 300000.0
+    ave_title_len = 19.0
     doc_len = len(doc)
+
     def _bm25(v):
         if v['word'] in doc:
-            idf = math.log(DOC_NUM / min(1.0, v['docfreq']))
+            idf = math.log(doc_num / min(1.0, v['docfreq']))
             tf = v['termweight']
-            return idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b*doc_len/AVE_TITLE_LEN))
+            return idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * doc_len / ave_title_len))
         else:
             return 0.0
-    
+
     score = sum([_bm25(v) for v in vocab])
 
     return score
-        
+
 
 def tfidf_jaccard_similarity(vocab, doc):
-    DOC_NUM = 300000
+    doc_num = 300000
     invocab = []
     for v in vocab:
         if v['word'] in doc and v not in invocab:
             invocab.append(v)
 
-    tfidf = [v['termweight'] * math.log(DOC_NUM / min(1.0, v['docfreq'])) for v in invocab]
+    tfidf = [v['termweight'] * math.log(doc_num / min(1.0, v['docfreq'])) for v in invocab]
     union = set([v['word'] for v in vocab] + doc)
     score = sum(tfidf) / float(len(union))
     return score
@@ -162,21 +179,3 @@ def jaccard_similarity(vocab, doc):
     union = set(wlist + doc)
     score = len(wset.intersection(dset)) / float(len(union))
     return score
-
-
-
-
-class Chat(object):
-    def __init__(self, query, tokenizer='jieba'):
-        self.query = query
-        self.tok, self.words, self.flags = Tokenizer(tokenizer).cut(query)
-        vocab_name = ['--+--'.join([t.word, t.flag, 'jieba']) for t in tok]
-        query_vocab = list(psql.query( '''
-                                                SELECT * FROM ingest_app_vocabulary
-                                                WHERE name IN %s;
-                                            ''', (tuple(vocab_name),)
-                                    )
-        )
-
-        self.vschema = psql.schema
-        # self.vocab = [{'word': ':'.join([q[vschema['word']], q[vschema['tag']]]),'termweight': 1.0, 'docfreq': q[vschema['doc_freq']]} for q in query_vocab]

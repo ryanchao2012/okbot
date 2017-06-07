@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
-import jieba.posseg as pseg
 import collections
 import json
 import time
