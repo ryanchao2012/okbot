@@ -8,6 +8,10 @@ from django.utils import timezone
 
 class PostImgur(models.Model):
     title = models.CharField(max_length=255)
+    grammar = models.CharField(max_length=255, default='', blank=True, null=True)
+    tokenized_jieba_tw = models.CharField(max_length=255, default='', blank=True, null=True)
+    url = models.CharField(max_length=1023, unique=True)
+    push = models.TextField()
 
 
 class Post(models.Model):
