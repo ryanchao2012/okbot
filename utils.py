@@ -154,14 +154,13 @@ def bm25_similarity(vocab, doc, k1=1.5, b=0.75):
 
     def _bm25(v):
         if v['word'] in doc:
-            idf = math.log(doc_num / min(1.0, v['docfreq']))
+            idf = math.log((doc_num - max(1.0, v['docfreq'])) / max(1.0, v['docfreq']))
             tf = v['termweight']
             return idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * doc_len / ave_title_len))
         else:
             return 0.0
 
     score = sum([_bm25(v) for v in vocab])
-
     return score
 
 

@@ -11,6 +11,7 @@ import numpy as np
 
 from utils import (
     PsqlQuery, Tokenizer,
+    bm25_similarity,
     tfidf_jaccard_similarity
 )
 
@@ -46,7 +47,7 @@ class Chat(object):
 
     vocab_docfreq_th = 10000
     default_tokenizer = 'jieba'
-    ranking_factor = 0.9
+    ranking_factor = 0.85
     max_query_post_num = 50000
     max_top_post_num = 5
 
@@ -106,7 +107,7 @@ class Chat(object):
 
     query_post_sql = '''
         SELECT tokenized, grammar, push, url, publish_date
-        FROM ingest_app_post WHERE id IN %s AND spider != 'mentalk'
+        FROM ingest_app_post WHERE id IN %s AND spider != 'mentalk' AND spider != 'marginalman'
         ORDER BY publish_date DESC;
     '''
 
@@ -321,6 +322,8 @@ class Chat(object):
             post_buffer.append(post)
             score_buffer.append(scorer(self.vocab, doc))
 
+#        for p, s in zip(post_buffer, score_buffer):
+#            self.logger.info('{}:{}'.format(s, p[self.pschema['tokenized']]))
         self.similar_post = post_buffer
         self.similar_score = score_buffer
 
@@ -418,8 +421,8 @@ class Chat(object):
         idx_ranking = np.asarray(score).argsort()[::-1]
 
         top_push = [push[idx] for idx in idx_ranking]
-        # for p in top_push:
-        #    self.logger.info(p)
+#        for p in top_push:
+#            self.logger.info(p)
 
         push_num = len(top_push)
         centre = push_num >> 1
