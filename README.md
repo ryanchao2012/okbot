@@ -6,6 +6,20 @@ The core modules in this repo are: ``crawl_app``, ``ingest_app`` and ``chat_app`
 
 <img src="res/icon.png" width="150"><img src="res/qrcode.png" width="130">
 
+<img src="res/line.png" width="140"><img src="res/messenger.png" width="150">
+
+
+Chat Demos
+----------
+<img src="res/demo7.png">
+<img src="res/demo6.png">
+<img src="res/demo1.png">
+<img src="res/demo2.png">
+<img src="res/demo3.png">
+<img src="res/demo4.png">
+
+
+
 PTT-Crawler
 -----------
 Crawlers are implemented with ``scrapy`` framework, the logic is defined under ``crawl_app/spider/`` directory, each article in crawled data is collected in jsonline files and formatted as follows:
@@ -64,7 +78,7 @@ The ``start`` and ``end`` index will be updated according to ``page`` and ``offs
 
     ./manage.py okbot_crawl <tag>
 
-After issuing a crawl task, a job log is generated; when the task is finished, a crawl summary is recorded and can be viewed in admin, ex:
+After issuing a crawl task, a job log is generated; when the task is finished, a statistic summary is recorded and can be viewed in admin, ex:
 
     "name": "Gossiping",
     "item_num": "3227",
