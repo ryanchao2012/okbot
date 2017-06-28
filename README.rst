@@ -13,20 +13,20 @@ PTT-Crawler
 -----------
 Crawlers are implemented with ``scrapy`` framework, the logic is defined under ``crawl_app/spider/`` directory, each article in crawled data is collected in jsonline files and formatted as follows:
 
-	"url": <url>,
-	"data": <article-publish-date>,
-	"title": <title>,
-	"author": <author>,
-	"content": <article-body>,
-	"push": <list of comment-string>,
+    "url": <url>,
+    "data": <article-publish-date>,
+    "title": <title>,
+    "author": <author>,
+    "content": <article-body>,
+    "push": <list of comment-string>,
 
 
 To build conversation corpus, we paired the ``title`` and ``push`` fields to mimic the Q&A behavior, here are some examples:
 
-	<title> as Q              <push> as A
-	綜藝玩很大是不是走下坡了      很久沒看了  都是老梗
-	該怎麼挽回好友？             就算挽回 以後也會因為別的事離開你
-	妹妹想去補習，該怎麼辦        其實你沒有妹妹
+    <title> as Q              <push> as A
+    綜藝玩很大是不是走下坡了      很久沒看了  都是老梗
+    該怎麼挽回好友？             就算挽回 以後也會因為別的事離開你
+    妹妹想去補習，該怎麼辦        其實你沒有妹妹
 	
 
 Further data cleaning process is handled by ``ingest_app``.
@@ -41,23 +41,23 @@ In order to manage these crawlers easily, the crawl engine are integrated with D
 
 A blacklist can be defined in admin as:
 
-	"type": title,
-	"phrase": 公告, Re:, Fw:, 投稿, 水桶,
+    "type": title,
+    "phrase": 公告, Re:, Fw:, 投稿, 水桶,
 
 Which means crawler should drop the item as the article's title contains one of these phrases. With this configuration, each crawler can equip multiple rules to aim different kind of censored contents.
 
 
 A spider can be defined in admin as:
 
-	"tag": Gossiping,  # forum name
-	"entry": https://www.ptt.cc/bbs/Gossiping/index{index}.html,
-	"page": 250,   # pages to crawl in a crawl task
-	"offset": 50,  # the distance from the newest page
-	"freq": 1,     # crawl frequencey, used with crontab, ex: daily
-	"blacklist": [<rule1>, <rule2>, ...],
-	"start": -1,   # start page index
-	"end": -1,     # end page index
-	"status": debug, # pass or debug
+    "tag": Gossiping,  # forum name
+    "entry": https://www.ptt.cc/bbs/Gossiping/index{index}.html,
+    "page": 250,   # pages to crawl in a crawl task
+    "offset": 50,  # the distance from the newest page
+    "freq": 1,     # crawl frequencey, used with crontab, ex: daily
+    "blacklist": [<rule1>, <rule2>, ...],
+    "start": -1,   # start page index
+    "end": -1,     # end page index
+    "status": debug, # pass or debug
 
 When a spider is created, run this command to check whether the config is valid:
 
@@ -69,15 +69,15 @@ The ``start`` and ``end`` index will be updated according to ``page`` and ``offs
 
 After issuing a crawl task, a job log is generated; when the task is finished, a crawl summary is recorded and can be viewed in admin, ex:
 
-	"name": "Gossiping",
-	"item_num": "3227",
-	"drop_num": "10",
-	"title": "mean: 19.2, std: 4.3",
-	"url": "mean: 56.0, std: 0.0",
-	"author": "mean: 16.7, std: 4.2",
-	"date": "mean: 24.0, std: 0.0",
-	"push": "mean: 17.4, std: 9.4",
-	"content": "mean: 269.3, std: 350.1"
+    "name": "Gossiping",
+    "item_num": "3227",
+    "drop_num": "10",
+    "title": "mean: 19.2, std: 4.3",
+    "url": "mean: 56.0, std: 0.0",
+    "author": "mean: 16.7, std: 4.2",
+    "date": "mean: 24.0, std: 0.0",
+    "push": "mean: 17.4, std: 9.4",
+    "content": "mean: 269.3, std: 350.1"
 
 Finally, we use crontab to manage daily crawl jobs, you can find the handler script in ``crawl_ingest.py``.
 
