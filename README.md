@@ -11,12 +11,12 @@ The core modules in this repo are: ``crawl_app``, ``ingest_app`` and ``chat_app`
 
 Chat Demos
 ----------
-<img src="res/demo7.png">
-<img src="res/demo6.png">
-<img src="res/demo1.png">
-<img src="res/demo2.png">
-<img src="res/demo3.png">
-<img src="res/demo4.png">
+<img src="res/demo7.png" width="300">
+<img src="res/demo6.png" width="300">
+<img src="res/demo1.png" width="300">
+<img src="res/demo2.png" width="300">
+<img src="res/demo3.png" width="300">
+<img src="res/demo4.png" width="300">
 
 
 
