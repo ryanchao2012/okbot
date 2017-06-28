@@ -4,10 +4,9 @@ MarginalBear
 **MarginalBear** is a chit-chatbot with a conversation retrieval engine based on PTT corpus.
 The core modules in this repo are: ``crawl_app``, ``ingest_app`` and ``chat_app``, and we use ``Django`` to manage these apps.
 
-<figure class="half">
-    <img src="res/icon.png" width="150">
-    <img src="res/qrcode.png" width="130">
-</figure>
+|<img src="res/icon.png" width="150">|<img src="res/qrcode.png" width="130">|
+|:---:|:---:|:---:|
+
 
 PTT-Crawler
 -----------
