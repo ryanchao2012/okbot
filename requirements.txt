@@ -1,0 +1,10 @@
+Django
+gensim
+jieba
+line-bot-sdk
+lxml
+numpy
+psycopg2
+requests
+Scrapy
+smart-open
