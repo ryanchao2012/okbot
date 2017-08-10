@@ -38,6 +38,8 @@ line_webhook_parser = WebhookParser(os.environ['LINE_CHANNEL_SECRET'])
 OKBOT_PAGE_ACCESS_KEY = os.environ['OKBOT_PAGE_ACCESS_KEY']
 OKBOT_VERIFY_TOKEN = os.environ['OKBOT_VERIFY_TOKEN']
 
+SLACK_WEBHOOK = os.environ['SLACK_WEBHOOK']
+
 # Create your views here.
 
 GRAPH_API_URL = 'https://graph.facebook.com/v2.6/me/messages'
@@ -95,6 +97,10 @@ def line_webhook(request):
                                 _message_obj(reply)
                             )
                             logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
+
+                            slack_log = "query: {}, reply: {}".format(query, reply)
+                            data = '{"text": \"' + slack_log + '\"}'
+                            requests.post(SLACK_WEBHOOK, headers={'Content-type': 'application/json'}, data=data.encode('utf8'))
 
                         if state_code == LineBot.code_leave:
                             bot.leave()
