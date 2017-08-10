@@ -98,7 +98,7 @@ def line_webhook(request):
                             )
                             logger.info('reply message: utype: {}, uid: {}, query: {}, reply: {}'.format(utype, uid, query, reply))
 
-                            slack_log = "query: {}, reply: {}".format(query, reply)
+                            slack_log = "====================\n\nquery: {}, reply: {}".format(query, reply)
                             data = '{"text": \"' + slack_log + '\"}'
                             requests.post(SLACK_WEBHOOK, headers={'Content-type': 'application/json'}, data=data.encode('utf8'))
 
