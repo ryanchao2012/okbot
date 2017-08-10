@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import random
+import requests
 
 from django.utils import timezone
 
@@ -305,9 +306,9 @@ class Chat(object):
     def _query_post(self):
         self.keyword = json.dumps(self.vocab, indent=4, ensure_ascii=False, sort_keys=True)
         self.logger.info(self.keyword)
-        slack_log = 'releated keywords ' + ':'.join(v['word'] for v in self.vocab)
+        slack_log = '====================\n\nreleated keywords: ' + '\t'.join(v['word'] for v in self.vocab)
         data = '{"text": \"' + slack_log + '\"}'
-        requests.post(SLACK_WEBHOOK, headers={'Content-type': 'application/json'}, data=data.encode('utf8'))
+        requests.post(self.SLACK_WEBHOOK, headers={'Content-type': 'application/json'}, data=data.encode('utf8'))
 
         query_pid = list(PsqlQuery().query(
             self.query_vocab2post_sql, (tuple(self.vid),))
@@ -366,7 +367,7 @@ class Chat(object):
         self.post_ref = '\n\n'.join(ref)
         self.logger.info(self.post_ref)
         data = '{"text": \"' + self.post_ref + '\"}'
-        requests.post(SLACK_WEBHOOK, headers={'Content-type': 'application/json'}, data=data.encode('utf8'))
+        requests.post(self.SLACK_WEBHOOK, headers={'Content-type': 'application/json'}, data=data.encode('utf8'))
 
     def _clean_push(self):
         push_pool = []
