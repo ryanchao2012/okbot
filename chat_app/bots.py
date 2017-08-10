@@ -306,7 +306,7 @@ class Chat(object):
     def _query_post(self):
         self.keyword = json.dumps(self.vocab, indent=4, ensure_ascii=False, sort_keys=True)
         self.logger.info(self.keyword)
-        slack_log = '====================\n\nreleated keywords: ' + '\t'.join(v['word'] for v in self.vocab)
+        slack_log = '\n====================\nreleated keywords:\t' + '\t'.join(v['word'] for v in self.vocab)
         data = '{"text": \"' + slack_log + '\"}'
         requests.post(self.SLACK_WEBHOOK, headers={'Content-type': 'application/json'}, data=data.encode('utf8'))
 
