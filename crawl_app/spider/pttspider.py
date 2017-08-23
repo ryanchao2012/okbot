@@ -26,7 +26,7 @@ class PttSpider(scrapy.Spider):
     reReplacePat = [
         (re.compile(r'<[^>]*>'), r''), 
         (re.compile(r'(<br\s?/>)+'), r'\n'),
-        (re.compile(r'(\s*[\r|\n|\t]+\s*)+'), r'\n'),
+        (re.compile(r'(\s*[\r\n\t]+\s*)+'), r'\n'),
         # (re.compile(r'\[[^\]]*\]'), r''),
         # (re.compile(r'\([^\)]*\)'), r''),
         # (re.compile(r'［[^］]*］'), r''),
